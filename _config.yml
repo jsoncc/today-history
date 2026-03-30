@@ -1,0 +1,9 @@
+title: 历史上的今天
+email: your-email@example.com
+description: 每天历史大事件
+baseurl: "/today-history"
+url: "https://jsoncc.github.io"
+theme: minima
+
+markdown: kramdown
+permalink: /:year/:month/:day/:title.html
