@@ -1,12 +1,12 @@
-title: 历史上的今天
-baseurl: /today-history
-url: https://jsoncc.github.io
-theme: minima
+# title: 历史上的今天
+# baseurl: /today-history
+# url: https://jsoncc.github.io
+# theme: minima
 
-# 关键：让 Jekyll 处理 _posts
-defaults:
-  - scope:
-      path: ""
-      type: "posts"
-    values:
-      layout: "post"
+# # 关键：让 Jekyll 处理 _posts
+# defaults:
+#   - scope:
+#       path: ""
+#       输入: "posts"
+#     values:
+#       layout: "post"
