@@ -14,4 +14,10 @@
 - `history-YYYY-MM-DD.md`：每日历史事件归档
 - `index.md`：主页入口
 
-## 测试git
+## 使用方法
+
+现在只需要：
+
+1. 在 src/assets/history 目录下创建新的markdown文件
+2. 文件名格式： history-YYYY-MM-DD.md （如 history-2026-04-02.md ）
+3. 系统会自动识别并在主页显示

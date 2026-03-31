@@ -14,31 +14,48 @@
     </div>
 
     <!-- 点击日期后，渲染对应 md 内容 -->
-    <MarkdownViewer v-if="currentMdUrl" :mdUrl="currentMdUrl" @close="closeHistory" />
+    <MarkdownViewer v-if="showViewer" :mdContent="currentMdContent" @close="closeHistory" />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 
-// 日期列表（和你原 md 文件名一一对应）
-const dateList = ref([
-  { date: '2026-04-01' },
-  { date: '2026-03-31' },
-  { date: '2026-03-30' }
-])
+// 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
+const historyFiles = import.meta.glob('./assets/history/*.md', { eager: true, query: '?raw', import: 'default' })
 
-const currentMdUrl = ref('')
+// 从文件路径中提取日期并生成 dateList
+const dateList = computed(() => {
+  const dates = Object.keys(historyFiles)
+    .map(path => {
+      // 从路径 ./assets/history/history-2026-03-30.md 中提取日期 2026-03-30
+      const match = path.match(/history-(\d{4}-\d{2}-\d{2})\.md$/)
+      return match ? match[1] : null
+    })
+    .filter(date => date !== null)
+    .sort((a, b) => new Date(b) - new Date(a)) // 按日期降序排列
+    .map(date => ({ date }))
+  
+  return dates
+})
+
+const currentMdContent = ref('')
+const showViewer = ref(false)
 
 // 点击日期，加载对应 md 文件
 const goToHistory = (date) => {
-  currentMdUrl.value = `/today-history/history/history-${date}.md`
+  const filePath = `./assets/history/history-${date}.md`
+  if (historyFiles[filePath]) {
+    currentMdContent.value = historyFiles[filePath].default || historyFiles[filePath]
+    showViewer.value = true
+  }
 }
 
 // 关闭历史详情弹窗
 const closeHistory = () => {
-  currentMdUrl.value = ''
+  showViewer.value = false
+  currentMdContent.value = ''
 }
 </script>
 

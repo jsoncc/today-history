@@ -6,57 +6,42 @@
         <button class="close-btn" @click="closeModal">&times;</button>
       </div>
       <div class="modal-body">
-        <div v-if="loading" class="loading">加载中...</div>
-        <div v-else class="markdown-content" v-html="htmlContent"></div>
+        <div class="markdown-content" v-html="htmlContent"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { marked } from 'marked'
 
-const props = defineProps(['mdUrl']) // 传入 md 文件的路径
+const props = defineProps(['mdContent']) // 传入 md 文件的内容
 const emit = defineEmits(['close']) // 定义关闭事件
 const htmlContent = ref('')
-const loading = ref(true)
 
 // 关闭弹窗
 const closeModal = () => {
   emit('close')
 }
 
-// 加载 md 文件的函数
-const loadMarkdown = async () => {
-  if (!props.mdUrl) return
-  
-  loading.value = true
-  try {
-    // 1. 读取 md 文件内容
-    const res = await fetch(props.mdUrl)
-    let mdText = await res.text()
-    
-    // 2. 去掉 YAML front matter (--- 之间的内容)
-    mdText = mdText.replace(/^---[\s\S]*?---\s*/, '')
-    
-    // 3. 用 marked 把 Markdown 转成 HTML
-    htmlContent.value = marked.parse(mdText)
-  } catch (err) {
-    htmlContent.value = '<p style="color: red;">文件加载失败</p>'
-  } finally {
-    loading.value = false
+// 处理 markdown 内容
+const processMarkdown = () => {
+  if (!props.mdContent) {
+    htmlContent.value = ''
+    return
   }
+  
+  // 去掉 YAML front matter (--- 之间的内容)
+  let mdText = props.mdContent.replace(/^---[\s\S]*?---\s*/, '')
+  
+  // 用 marked 把 Markdown 转成 HTML
+  htmlContent.value = marked.parse(mdText)
 }
 
-onMounted(() => {
-  loadMarkdown()
-})
-
-// 监听 mdUrl 的变化，重新加载内容
-watch(() => props.mdUrl, (newUrl, oldUrl) => {
-  console.log('mdUrl changed from', oldUrl, 'to', newUrl)
-  loadMarkdown()
+// 监听 mdContent 的变化
+watch(() => props.mdContent, () => {
+  processMarkdown()
 }, { immediate: true })
 </script>
 
