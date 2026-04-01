@@ -44,6 +44,20 @@
           </a>
         </div>
       </div>
+
+      <!-- VPN模块 -->
+      <div class="list-card">
+        <h2 class="module-title">VPN</h2>
+        <div class="list-item" v-for="item in vpnList" :key="item.path">
+          <a 
+            :href="`#/vpn/${item.name}`" 
+            class="date-link"
+            @click.prevent="goToVpn(item.path)"
+          >
+            {{ item.name }}
+          </a>
+        </div>
+      </div>
     </div>
 
     <!-- 点击后，渲染对应 md 内容 -->
@@ -63,6 +77,9 @@ const blogFiles = import.meta.glob('./assets/blog/*.md', { eager: true, query: '
 
 // 读取 assets/command 目录下的所有 md 文件
 const commandFiles = import.meta.glob('./assets/command/*.md', { eager: true, query: '?raw', import: 'default' })
+
+// 读取 assets/vpn 目录下的所有 md 文件
+const vpnFiles = import.meta.glob('./assets/vpn/*.md', { eager: true, query: '?raw', import: 'default' })
 
 // 从文件路径中提取日期并生成 dateList
 const dateList = computed(() => {
@@ -105,6 +122,19 @@ const commandList = computed(() => {
   return commands
 })
 
+// 从文件路径中提取VPN文件名并生成 vpnList
+const vpnList = computed(() => {
+  const vpns = Object.keys(vpnFiles)
+    .map(path => {
+      // 从路径 ./assets/vpn/文件名.md 中提取文件名
+      const match = path.match(/\/([^/]+)\.md$/)
+      return match ? { name: match[1], path } : null
+    })
+    .filter(vpn => vpn !== null)
+  
+  return vpns
+})
+
 const currentMdContent = ref('')
 const showViewer = ref(false)
 
@@ -129,6 +159,14 @@ const goToBlog = (path) => {
 const goToCommand = (path) => {
   if (commandFiles[path]) {
     currentMdContent.value = commandFiles[path].default || commandFiles[path]
+    showViewer.value = true
+  }
+}
+
+// 点击VPN，加载对应 md 文件
+const goToVpn = (path) => {
+  if (vpnFiles[path]) {
+    currentMdContent.value = vpnFiles[path].default || vpnFiles[path]
     showViewer.value = true
   }
 }
