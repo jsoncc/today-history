@@ -1,6 +1,7 @@
 <template>
   <div class="home">
     <h1 class="page-title">主页</h1>
+    <p class="page-subtitle">作者：JsonCC · 每天都有新内容</p>
     
     <div class="module-container">
       <!-- 历史上的今天模块 -->
@@ -203,8 +204,18 @@ const closeViewer = () => {
 .page-title {
   text-align: center;
   font-size: 32px;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
   color: #1f2937;
+  font-weight: 700;
+}
+
+.page-subtitle {
+  text-align: center;
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 40px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
 }
 
 .module-title {
