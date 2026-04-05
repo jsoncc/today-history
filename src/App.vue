@@ -48,7 +48,7 @@
 
       <!-- VPN模块 -->
       <div class="list-card">
-        <h2 class="module-title">VPN</h2>
+        <h2 class="module-title">科学上网</h2>
         <div class="list-item" v-for="item in vpnList" :key="item.path">
           <a 
             :href="`#/vpn/${item.name}`" 
