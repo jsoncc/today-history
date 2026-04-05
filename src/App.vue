@@ -59,6 +59,57 @@
           </a>
         </div>
       </div>
+
+      <!-- 翻译模块 -->
+      <div class="list-card translate-card">
+        <h2 class="module-title">翻译</h2>
+        <p class="translate-hint">自动识别左侧为中文或英文，点击翻译后在右侧显示另一种语言</p>
+        <div class="translate-toolbar">
+          <p
+            class="translate-detect"
+            :class="{ warn: translateDetectWarn }"
+            role="status"
+            aria-live="polite"
+          >
+            {{ translateDetectMessage }}
+          </p>
+          <button
+            type="button"
+            class="translate-submit"
+            :disabled="translateLoading || !canTranslate"
+            @click="runTranslate"
+          >
+            {{ translateLoading ? '翻译中…' : '翻译' }}
+          </button>
+        </div>
+        <div class="translate-panels">
+          <div class="translate-panel">
+            <label class="panel-label" for="translate-input">原文</label>
+            <textarea
+              id="translate-input"
+              v-model="translateSource"
+              class="translate-textarea"
+              placeholder="在此输入要翻译的内容…"
+              rows="10"
+              spellcheck="false"
+            />
+          </div>
+          <div class="translate-divider" aria-hidden="true" />
+          <div class="translate-panel">
+            <label class="panel-label" for="translate-output">译文</label>
+            <textarea
+              id="translate-output"
+              :value="translateResult"
+              class="translate-textarea translate-output"
+              readonly
+              placeholder="翻译结果将显示在这里"
+              rows="10"
+              spellcheck="false"
+            />
+          </div>
+        </div>
+        <p v-if="translateError" class="translate-error">{{ translateError }}</p>
+      </div>
     </div>
 
     <!-- 点击后，渲染对应 md 内容 -->
@@ -68,6 +119,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import CryptoJS from 'crypto-js'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 
 // 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
@@ -177,6 +229,112 @@ const closeViewer = () => {
   showViewer.value = false
   currentMdContent.value = ''
 }
+
+// 翻译：百度翻译开放平台通用翻译 API（开发/preview 走 Vite 代理 /baidu-fanyi 避免 CORS）
+const translateSource = ref('')
+const translateResult = ref('')
+const translateLoading = ref(false)
+const translateError = ref('')
+
+const baiduAppId = import.meta.env.VITE_BAIDU_APP_ID
+const baiduSecret = import.meta.env.VITE_BAIDU_SECRET
+
+const baiduTranslateConfigured = computed(
+  () => Boolean(String(baiduAppId || '').trim() && String(baiduSecret || '').trim())
+)
+
+/** 推断百度 API 的 target：中文为主 → 译成 en；英文为主 → 译成 zh */
+const inferTargetLang = (text) => {
+  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
+  const latin = (text.match(/[a-zA-Z]/g) || []).length
+  if (cjk === 0 && latin === 0) return null
+  return cjk >= latin ? 'en' : 'zh'
+}
+
+const translateApiUrl = () =>
+  String(import.meta.env.VITE_BAIDU_TRANSLATE_URL || '').trim() || '/baidu-fanyi'
+
+const translateDetectMessage = computed(() => {
+  if (!baiduTranslateConfigured.value) {
+    return '请复制 .env.example 为 .env，填写 VITE_BAIDU_APP_ID 与 VITE_BAIDU_SECRET'
+  }
+  const t = translateSource.value.trim()
+  if (!t) return '输入内容后将自动判断中文或英文'
+  const to = inferTargetLang(t)
+  if (!to) return '未检测到中文或英文字符，请补充正文后再翻译'
+  return to === 'en' ? '识别为中文 → 译为英文' : '识别为英文 → 译为中文'
+})
+
+const translateDetectWarn = computed(() => {
+  if (!baiduTranslateConfigured.value) return true
+  const t = translateSource.value.trim()
+  if (!t) return false
+  return inferTargetLang(t) === null
+})
+
+const canTranslate = computed(() => {
+  const t = translateSource.value.trim()
+  return Boolean(baiduTranslateConfigured.value && t && inferTargetLang(t))
+})
+
+const BAIDU_Q_MAX_BYTES = 6000
+
+const runTranslate = async () => {
+  const text = translateSource.value.trim()
+  if (!text) return
+  if (!baiduTranslateConfigured.value) {
+    translateError.value = '未配置百度翻译 APP ID 或密钥'
+    return
+  }
+  const to = inferTargetLang(text)
+  if (!to) {
+    translateError.value = '请输入含中文或英文的内容'
+    return
+  }
+  if (new TextEncoder().encode(text).length > BAIDU_Q_MAX_BYTES) {
+    translateError.value = `单次翻译请勿超过约 ${BAIDU_Q_MAX_BYTES} 字节（UTF-8）`
+    return
+  }
+  translateError.value = ''
+  translateLoading.value = true
+  translateResult.value = ''
+  try {
+    const appid = String(baiduAppId).trim()
+    const secret = String(baiduSecret).trim()
+    const salt = String(Date.now())
+    const sign = CryptoJS.MD5(`${appid}${text}${salt}${secret}`).toString()
+
+    const body = new URLSearchParams({
+      q: text,
+      from: 'auto',
+      to,
+      appid,
+      salt,
+      sign
+    })
+
+    const res = await fetch(translateApiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: body.toString()
+    })
+    const data = await res.json()
+    if (data.error_code != null) {
+      const code = data.error_code
+      const msg = data.error_msg || '百度翻译接口错误'
+      throw new Error(`${msg}（${code}）`)
+    }
+    const parts = data.trans_result
+    if (!Array.isArray(parts) || !parts.length) throw new Error('未返回译文')
+    const out = parts.map((p) => p.dst).join('\n')
+    if (!String(out).trim()) throw new Error('未返回译文')
+    translateResult.value = out.trim()
+  } catch (e) {
+    translateError.value = e instanceof Error ? e.message : '翻译失败，请稍后重试'
+  } finally {
+    translateLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -242,5 +400,131 @@ const closeViewer = () => {
 }
 .date-link:hover {
   text-decoration: underline;
+}
+
+.translate-card {
+  flex: 1 1 100%;
+  min-width: 100%;
+  max-height: none;
+}
+
+.translate-hint {
+  margin: -8px 0 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.translate-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.translate-detect {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.translate-detect.warn {
+  color: #b45309;
+}
+
+.translate-submit {
+  padding: 8px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: #0969da;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.translate-submit:hover:not(:disabled) {
+  background: #0558b8;
+}
+
+.translate-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.translate-panels {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  min-height: 220px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.translate-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fff;
+}
+
+.panel-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 10px 14px 6px;
+}
+
+.translate-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  padding: 12px 14px 16px;
+  border: none;
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #1f2937;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.translate-textarea:focus {
+  outline: none;
+}
+
+.translate-output {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.translate-divider {
+  width: 1px;
+  background: #e5e7eb;
+  min-height: 100%;
+}
+
+.translate-error {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .translate-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .translate-divider {
+    width: 100%;
+    height: 1px;
+    min-height: 0;
+  }
 }
 </style>
