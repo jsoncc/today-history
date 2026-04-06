@@ -238,10 +238,22 @@ const translateError = ref('')
 
 const baiduAppId = import.meta.env.VITE_BAIDU_APP_ID
 const baiduSecret = import.meta.env.VITE_BAIDU_SECRET
+const baiduTranslateUrlEnv = String(import.meta.env.VITE_BAIDU_TRANSLATE_URL || '').trim()
 
 const baiduTranslateConfigured = computed(
   () => Boolean(String(baiduAppId || '').trim() && String(baiduSecret || '').trim())
 )
+
+/** GitHub Pages 等静态部署无法直连百度（无 CORS），必须配置可转发的 URL */
+const baiduTranslateNeedsProxy = computed(
+  () => import.meta.env.PROD && !baiduTranslateUrlEnv
+)
+
+const translateApiUrl = () => {
+  if (baiduTranslateUrlEnv) return baiduTranslateUrlEnv
+  if (import.meta.env.DEV) return '/baidu-fanyi'
+  return ''
+}
 
 /** 推断百度 API 的 target：中文为主 → 译成 en；英文为主 → 译成 zh */
 const inferTargetLang = (text) => {
@@ -251,12 +263,12 @@ const inferTargetLang = (text) => {
   return cjk >= latin ? 'en' : 'zh'
 }
 
-const translateApiUrl = () =>
-  String(import.meta.env.VITE_BAIDU_TRANSLATE_URL || '').trim() || '/baidu-fanyi'
-
 const translateDetectMessage = computed(() => {
   if (!baiduTranslateConfigured.value) {
-    return '请复制 .env.example 为 .env，填写 VITE_BAIDU_APP_ID 与 VITE_BAIDU_SECRET'
+    return '本地：复制 .env.example 为 .env 并填写密钥；线上：在 GitHub 仓库 Secrets 配置 VITE_BAIDU_APP_ID / VITE_BAIDU_SECRET'
+  }
+  if (baiduTranslateNeedsProxy.value) {
+    return '线上需在 GitHub Secrets 增加 VITE_BAIDU_TRANSLATE_URL（可用仓库 workers 目录部署 Cloudflare Worker 获得地址）'
   }
   const t = translateSource.value.trim()
   if (!t) return '输入内容后将自动判断中文或英文'
@@ -267,6 +279,7 @@ const translateDetectMessage = computed(() => {
 
 const translateDetectWarn = computed(() => {
   if (!baiduTranslateConfigured.value) return true
+  if (baiduTranslateNeedsProxy.value) return true
   const t = translateSource.value.trim()
   if (!t) return false
   return inferTargetLang(t) === null
@@ -274,7 +287,12 @@ const translateDetectWarn = computed(() => {
 
 const canTranslate = computed(() => {
   const t = translateSource.value.trim()
-  return Boolean(baiduTranslateConfigured.value && t && inferTargetLang(t))
+  return Boolean(
+    baiduTranslateConfigured.value &&
+      !baiduTranslateNeedsProxy.value &&
+      t &&
+      inferTargetLang(t)
+  )
 })
 
 const BAIDU_Q_MAX_BYTES = 6000
@@ -299,6 +317,10 @@ const runTranslate = async () => {
   translateLoading.value = true
   translateResult.value = ''
   try {
+    const apiUrl = translateApiUrl()
+    if (!apiUrl) {
+      throw new Error('未配置翻译接口地址：生产环境请设置 VITE_BAIDU_TRANSLATE_URL')
+    }
     const appid = String(baiduAppId).trim()
     const secret = String(baiduSecret).trim()
     const salt = String(Date.now())
@@ -313,7 +335,7 @@ const runTranslate = async () => {
       sign
     })
 
-    const res = await fetch(translateApiUrl(), {
+    const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: body.toString()
