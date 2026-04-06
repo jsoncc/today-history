@@ -1,23 +1,158 @@
-# 📅 today-history
-历史上的今天大事件
+# today-history
 
-<div align="center">
-  <a href="https://jsoncc.github.io/today-history/" target="_blank" rel="noopener noreferrer">
-    <img src="https://img.shields.io/badge/🚀-在线预览-2ea44f?style=for-the-badge" alt="在线预览">
-  </a>
-</div>
+一个基于 Vue 3 + Vite 的静态站点，用于维护和展示：
 
-## 🔗 项目预览
-<a href="https://jsoncc.github.io/today-history/" target="_blank" rel="noopener noreferrer">https://jsoncc.github.io/today-history/</a>
+- 历史上的今天（按日期 Markdown）
+- 博客文档（Markdown）
+- 命令文档（Markdown）
+- VPN 记录（Markdown）
+- 中英文翻译工具（百度翻译 API）
 
-## 📁 项目结构
-- `history-YYYY-MM-DD.md`：每日历史事件归档
-- `index.md`：主页入口
+在线地址：<https://jsoncc.github.io/today-history/>
 
-## 使用方法
+---
 
-现在只需要：
+## 技术栈
 
-1. 在 src/assets/history 目录下创建新的markdown文件
-2. 文件名格式： history-YYYY-MM-DD.md （如 history-2026-04-02.md ）
-3. 系统会自动识别并在主页显示
+- `vue@3`
+- `vite@5`
+- `marked`（Markdown 渲染）
+- `crypto-js`（百度翻译签名 MD5）
+- GitHub Actions + GitHub Pages（自动部署）
+
+---
+
+## 目录结构
+
+```text
+.
+├─ src/
+│  ├─ App.vue
+│  ├─ components/
+│  │  └─ MarkdownViewer.vue
+│  └─ assets/
+│     ├─ history/      # 历史内容：history-YYYY-MM-DD.md
+│     ├─ blog/         # 博客内容：*.md
+│     ├─ command/      # 命令文档：*.md
+│     ├─ vpn/          # VPN 文档：*.md
+│     └─ images/       # Markdown 内图片资源
+├─ workers/
+│  ├─ baidu-proxy.js   # Cloudflare Worker 转发百度翻译接口
+│  └─ wrangler.toml
+├─ .github/workflows/
+│  └─ deploy.yml       # GitHub Pages 部署流程
+├─ vite.config.js
+└─ .env.example
+```
+
+---
+
+## 本地开发
+
+### 1) 安装依赖
+
+```bash
+npm install
+```
+
+### 2) 配置环境变量
+
+复制 `.env.example` 为 `.env`，填写：
+
+```env
+VITE_BAIDU_APP_ID=你的百度翻译APP_ID
+VITE_BAIDU_SECRET=你的百度翻译密钥
+# 可选：本地通常不填。若你要本地模拟生产，可填 Worker 地址
+# VITE_BAIDU_TRANSLATE_URL=https://xxx.workers.dev
+```
+
+### 3) 启动
+
+```bash
+npm run dev
+```
+
+---
+
+## 翻译模块说明（百度翻译）
+
+### 请求链路
+
+- 开发环境：前端请求 `/baidu-fanyi`，由 Vite 代理到百度接口
+- 生产环境（GitHub Pages）：前端请求 `VITE_BAIDU_TRANSLATE_URL`（建议 Cloudflare Worker），再由 Worker 转发到百度接口
+
+### 为什么生产要 Worker
+
+GitHub Pages 是纯静态托管，无法使用 Vite 代理；浏览器也不能直接跨域调用百度翻译 API，所以必须有一个可访问的转发层。
+
+### Worker 快速部署
+
+```bash
+cd workers
+npx wrangler login
+npx wrangler deploy
+```
+
+部署后拿到 `https://xxx.workers.dev`，用于配置 `VITE_BAIDU_TRANSLATE_URL`。
+
+---
+
+## GitHub Pages 自动部署
+
+推送到 `main` 后，`.github/workflows/deploy.yml` 会自动构建并发布。
+
+请在仓库 `Settings -> Secrets and variables -> Actions` 配置：
+
+- `VITE_BAIDU_APP_ID`
+- `VITE_BAIDU_SECRET`
+- `VITE_BAIDU_TRANSLATE_URL`（Worker 地址）
+
+---
+
+## 内容维护规则
+
+### 历史内容
+
+- 目录：`src/assets/history/`
+- 文件名：`history-YYYY-MM-DD.md`（例如 `history-2026-04-07.md`）
+- 首页会自动按日期倒序读取并展示
+
+### 博客 / 命令 / VPN
+
+- 目录分别为：
+  - `src/assets/blog/`
+  - `src/assets/command/`
+  - `src/assets/vpn/`
+- 文件名使用可读名称（`.md`）
+- 首页自动扫描并展示
+
+### Markdown 图片引用（项目内相对路径）
+
+- 图片放到：`src/assets/images/...`
+- 在 Markdown 中引用：`./images/...`
+- 示例：`![示例图](./images/blog/demo/image.png)`
+
+项目内已对 Markdown 图片路径做解析，便于在本地与打包后显示。
+
+---
+
+## 常用命令
+
+```bash
+# 开发
+npm run dev
+
+# 构建
+npm run build
+
+# 预览构建产物
+npm run preview
+```
+
+---
+
+## 安全提示
+
+- `.env` 不要提交到仓库
+- `.env.example` 仅保留变量名，不放真实密钥
+- 若密钥曾在公开渠道泄露，请立即在百度翻译开放平台重置
