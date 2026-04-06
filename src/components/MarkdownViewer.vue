@@ -22,6 +22,23 @@ import { marked } from 'marked'
 const props = defineProps(['mdContent']) // 传入 md 文件的内容
 const emit = defineEmits(['close']) // 定义关闭事件
 const htmlContent = ref('')
+const imageFiles = import.meta.glob('../assets/images/**/*', { eager: true, import: 'default' })
+
+const resolveMarkdownImage = (rawUrl) => {
+  const url = String(rawUrl || '').trim()
+  if (!url) return url
+  if (/^(https?:)?\/\//.test(url) || url.startsWith('data:') || url.startsWith('#')) {
+    return url
+  }
+
+  const withoutPrefix = url.replace(/^\.\//, '').replace(/^\.\.\//, '')
+  if (!withoutPrefix.startsWith('images/')) {
+    return url
+  }
+
+  const key = `../assets/${withoutPrefix}`
+  return imageFiles[key] || url
+}
 
 // 关闭弹窗
 const closeModal = () => {
@@ -54,6 +71,13 @@ const processMarkdown = () => {
   
   // 去掉 YAML front matter (--- 之间的内容)
   let mdText = props.mdContent.replace(/^---[\s\S]*?---\s*/, '')
+
+  // 解析 Markdown 相对图片路径（支持带空格路径与 <...> 包裹写法）到 Vite 资源 URL
+  mdText = mdText.replace(/!\[([^\]]*)\]\((<[^>]+>|[^)]+)\)/g, (_, alt, rawUrl) => {
+    const normalizedUrl = String(rawUrl || '').trim().replace(/^<|>$/g, '')
+    const resolved = resolveMarkdownImage(normalizedUrl)
+    return `![${alt}](${resolved})`
+  })
   
   // 用 marked 把 Markdown 转成 HTML
   htmlContent.value = marked.parse(mdText)
