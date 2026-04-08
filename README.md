@@ -7,6 +7,7 @@
 - 命令文档（Markdown）
 - VPN 记录（Markdown）
 - 中英文翻译工具（百度翻译 API）
+- 左侧模块导航（支持「全部 / 单模块」切换）
 
 在线地址：<https://jsoncc.github.io/today-history/>
 
@@ -26,13 +27,16 @@
 
 ```text
 .
+├─ generate-blog-meta.mjs      # 生成博客更新时间元数据（基于 Git 提交时间）
 ├─ src/
 │  ├─ App.vue
+│  ├─ App.css
 │  ├─ components/
 │  │  └─ MarkdownViewer.vue
 │  └─ assets/
 │     ├─ history/      # 历史内容：history-YYYY-MM-DD.md
 │     ├─ blog/         # 博客内容：*.md
+│     │  └─ blog-meta.json     # 自动生成：博客更新时间（path -> unix 时间戳）
 │     ├─ command/      # 命令文档：*.md
 │     ├─ vpn/          # VPN 文档：*.md
 │     └─ images/       # Markdown 内图片资源
@@ -71,6 +75,14 @@ VITE_BAIDU_SECRET=你的百度翻译密钥
 ```bash
 npm run dev
 ```
+
+> `npm run dev` / `npm run build` 前会自动执行 `generate-blog-meta.mjs`，用于刷新博客更新时间排序数据。
+
+---
+
+## 首页导航改版后
+
+![首页导航改版后](./src/assets/images/home/home-nav-redesign.png)
 
 ---
 
@@ -125,6 +137,15 @@ npx wrangler deploy
   - `src/assets/vpn/`
 - 文件名使用可读名称（`.md`）
 - 首页自动扫描并展示
+- 博客列表按“文档最后一次 Git 提交时间”倒序显示（最新更新在最上）
+- 科学上网模块在左侧切换到单模块时，会直接展示最新一篇文档正文
+
+### 首页导航说明
+
+- 左侧导航支持切换：
+  - `全部`：展示所有模块
+  - `历史上的今天 / 博客 / 命令 / 科学上网 / 翻译`：只展示对应模块
+- 在单模块模式下，卡片高度会提升到接近视口高度，便于阅读长内容
 
 ### Markdown 图片引用（项目内相对路径）
 
@@ -147,6 +168,9 @@ npm run build
 
 # 预览构建产物
 npm run preview
+
+# 手动刷新博客更新时间元数据（一般不需要，dev/build 会自动执行）
+node generate-blog-meta.mjs
 ```
 
 ---
