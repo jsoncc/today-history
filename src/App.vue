@@ -102,6 +102,12 @@
         </div>
         <p v-if="translateError" class="translate-error">{{ translateError }}</p>
       </div>
+
+      <!-- 格式化校验模块 -->
+      <div v-if="showModule('formatCheck')" class="list-card format-check-card">
+        <h2 class="module-title">格式化校验</h2>
+        <JsonFormatValidator />
+      </div>
       </div>
     </div>
 
@@ -115,6 +121,7 @@ import { ref, computed } from 'vue'
 import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
+import JsonFormatValidator from './components/JsonFormatValidator.vue'
 import blogMeta from './assets/blog/blog-meta.json'
 
 // 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
@@ -212,6 +219,7 @@ const moduleTabs = [
   { key: 'blog', label: '博客' },
   { key: 'command', label: '命令' },
   { key: 'vpn', label: '科学上网' },
+  { key: 'formatCheck', label: '格式化校验' },
   { key: 'translate', label: '翻译' }
 ]
 

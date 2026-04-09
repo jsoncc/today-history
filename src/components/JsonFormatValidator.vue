@@ -1,0 +1,326 @@
+<template>
+  <div class="jfv">
+    <div class="jfv-editor">
+      <div ref="gutterRef" class="jfv-gutter" aria-hidden="true">
+        <div
+          v-for="no in lineCount"
+          :key="no"
+          class="jfv-gutter-line"
+          :class="{ active: statusKind === 'error' && errorDetail && no === errorDetail.line }"
+        >
+          {{ no }}
+        </div>
+      </div>
+      <textarea
+        ref="textareaRef"
+        v-model="inputText"
+        class="jfv-textarea"
+        :style="highlightStyle"
+        placeholder="在此输入 JSON…"
+        spellcheck="false"
+        @scroll="syncScroll"
+      />
+
+      <button type="button" class="jfv-clear" :disabled="!inputText" @click="clearAll">清空</button>
+    </div>
+
+    <div class="jfv-actionsbar">
+      <button type="button" class="jfv-action primary" :disabled="!canRun" @click="run">格式化校验</button>
+      <button type="button" class="jfv-action" :disabled="!inputText" @click="copyInput">复制</button>
+    </div>
+
+    <div
+      class="jfv-result"
+      :class="{ ok: statusKind === 'ok', error: statusKind === 'error' }"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="jfv-result-icon" aria-hidden="true">
+        <span v-if="statusKind === 'ok'">✓</span>
+        <span v-else-if="statusKind === 'error'">✕</span>
+        <span v-else>i</span>
+      </span>
+      <div class="jfv-result-text">
+        <div class="jfv-result-title">{{ statusText }}</div>
+        <div v-if="statusKind === 'error' && errorDetail" class="jfv-result-sub">
+          第 {{ errorDetail.line }} 行第 {{ errorDetail.column }} 列：{{ errorDetail.message }}
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, nextTick, ref } from 'vue'
+
+const inputText = ref('')
+const statusKind = ref('idle') // idle | ok | error
+const statusText = ref('请输入 JSON 后点击“格式化校验”')
+const errorDetail = ref(null)
+const textareaRef = ref(null)
+const gutterRef = ref(null)
+
+const LINE_HEIGHT_PX = 22
+
+const canRun = computed(() => Boolean(inputText.value.trim()))
+
+const lineCount = computed(() => Math.max(1, String(inputText.value || '').split('\n').length))
+
+const highlightStyle = computed(() => {
+  if (statusKind.value !== 'error' || !errorDetail.value?.line) return {}
+  const start = (errorDetail.value.line - 1) * LINE_HEIGHT_PX
+  const end = start + LINE_HEIGHT_PX
+  return {
+    '--jfv-hl-start': `${start}px`,
+    '--jfv-hl-end': `${end}px`
+  }
+})
+
+const clearAll = () => {
+  inputText.value = ''
+  statusKind.value = 'idle'
+  statusText.value = '请输入 JSON 后点击“格式化校验”'
+  errorDetail.value = null
+}
+
+const copyInput = async () => {
+  if (!inputText.value) return
+  await navigator.clipboard.writeText(inputText.value)
+}
+
+const extractPositionFromErrorMessage = (message) => {
+  const m = String(message || '').match(/position\s+(\d+)/i)
+  if (!m) return null
+  const pos = Number(m[1])
+  return Number.isFinite(pos) ? pos : null
+}
+
+const computeLineColumnFromIndex = (text, index) => {
+  const safeIndex = Math.max(0, Math.min(Number(index || 0), text.length))
+  const before = text.slice(0, safeIndex)
+  const lines = before.split('\n')
+  const line = lines.length
+  const column = lines[lines.length - 1].length + 1
+  return { line, column }
+}
+
+const buildSnippet = (lineText, column) => {
+  const col = Math.max(1, Number(column || 1))
+  const caretPad = ' '.repeat(Math.max(0, col - 1))
+  return `${lineText}\n${caretPad}^`
+}
+
+const syncScroll = () => {
+  const ta = textareaRef.value
+  const gutter = gutterRef.value
+  if (!ta || !gutter) return
+  gutter.scrollTop = ta.scrollTop
+}
+
+const run = () => {
+  const raw = inputText.value
+  const trimmed = raw.trim()
+  errorDetail.value = null
+
+  if (!trimmed) {
+    statusKind.value = 'idle'
+    statusText.value = '请输入 JSON 后点击“格式化校验”'
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    inputText.value = JSON.stringify(parsed, null, 2)
+    statusKind.value = 'ok'
+    statusText.value = '正确的 JSON'
+    nextTick(() => syncScroll())
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'JSON 解析失败'
+    const pos = extractPositionFromErrorMessage(msg)
+    const { line, column } = pos == null ? { line: 1, column: 1 } : computeLineColumnFromIndex(raw, pos)
+    const lines = raw.split('\n')
+    const lineText = lines[line - 1] ?? ''
+    const detail = {
+      message: msg,
+      line,
+      column,
+      snippet: buildSnippet(lineText, column)
+    }
+    errorDetail.value = detail
+    statusKind.value = 'error'
+    statusText.value = `第 ${line} 行解析错误：`
+    nextTick(async () => {
+      await nextTick()
+      const ta = textareaRef.value
+      if (!ta) return
+      const top = Math.max(0, (line - 1) * LINE_HEIGHT_PX - LINE_HEIGHT_PX * 2)
+      ta.scrollTop = top
+      syncScroll()
+    })
+  }
+}
+</script>
+
+<style scoped>
+.jfv-editor {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  border: 1px solid #e6e6e6;
+  background: #fff;
+  border-radius: 2px;
+  overflow: hidden;
+  min-height: 340px;
+}
+
+.jfv-gutter {
+  background: #fbfbfb;
+  border-right: 1px solid #e6e6e6;
+  overflow: hidden;
+  padding: 10px 0;
+}
+
+.jfv-gutter-line {
+  height: 22px;
+  line-height: 22px;
+  font-size: 12px;
+  color: #999;
+  text-align: right;
+  padding-right: 10px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.jfv-gutter-line.active {
+  background: #f6d3d3;
+  color: #c00;
+  font-weight: 700;
+}
+
+.jfv-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 22px;
+  min-height: 340px;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #333;
+  background: #fff;
+  background-image: linear-gradient(#f6d3d3, #f6d3d3);
+  background-repeat: no-repeat;
+  background-size: 100% calc(var(--jfv-hl-end, 0px) - var(--jfv-hl-start, 0px));
+  background-position: 0 var(--jfv-hl-start, -9999px);
+}
+
+.jfv-clear {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #666;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.jfv-clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jfv-actionsbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 10px;
+  border: 1px solid #e6e6e6;
+  border-top: none;
+  background: #f7f7f7;
+}
+
+.jfv-action {
+  padding: 9px 18px;
+  font-size: 13px;
+  color: #333;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #e6e6e6;
+  cursor: pointer;
+}
+
+.jfv-action.primary {
+  background: #1e9fff;
+  color: #fff;
+  font-weight: 700;
+}
+
+.jfv-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jfv-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e6e6e6;
+  border-top: none;
+  background: #fff;
+}
+
+.jfv-result.ok {
+  background: #e8f8e8;
+}
+
+.jfv-result.error {
+  background: #fcecec;
+}
+
+.jfv-result-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  background: #bdbdbd;
+  flex: 0 0 auto;
+}
+
+.jfv-result.ok .jfv-result-icon {
+  background: #16a34a;
+}
+
+.jfv-result.error .jfv-result-icon {
+  background: #ef4444;
+}
+
+.jfv-result-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+
+.jfv-result-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+@media (max-width: 640px) {
+  .jfv-editor {
+    grid-template-columns: 42px 1fr;
+  }
+}
+</style>
+
