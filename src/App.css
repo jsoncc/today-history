@@ -49,6 +49,11 @@
   display: block;
 }
 
+.sidebar-dropdown-menu {
+  transform: none;
+  padding: 10px;
+}
+
 .sidebar-dropdown-item {
   width: 100%;
   border: none;
@@ -478,20 +483,42 @@
   }
 
   .module-sidebar {
-    position: static;
-    padding: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 10px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
   }
 
   .sidebar-nav {
     flex-direction: row;
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 4px;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    gap: 8px;
   }
 
   .sidebar-item {
     flex: 0 0 auto;
     white-space: nowrap;
+    padding: 8px 10px;
+    border-radius: 999px;
+    width: auto;
+    text-align: center;
+  }
+
+  .sidebar-dropdown {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .sidebar-dropdown-menu {
+    width: max-content;
+    min-width: 220px;
   }
 }
 

@@ -30,27 +30,38 @@
                 class="sidebar-item"
                 :class="{ active: activeModule === tab.key }"
                 @click="openToolsDefault"
+                :ref="setToolsAnchor"
               >
                 {{ tab.label }}
               </button>
-              <div v-show="toolsMenuOpen" class="sidebar-dropdown-menu" role="menu" aria-label="工具集合">
-                <button
-                  type="button"
-                  class="sidebar-dropdown-item"
-                  :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
-                  @click="openTool('formatCheck')"
+              <Teleport to="body">
+                <div
+                  v-show="toolsMenuOpen"
+                  class="sidebar-dropdown-menu"
+                  role="menu"
+                  aria-label="工具集合"
+                  :style="toolsMenuStyle"
+                  @mouseenter="openToolsMenu"
+                  @mouseleave="closeToolsMenu"
                 >
-                  格式化校验
-                </button>
-                <button
-                  type="button"
-                  class="sidebar-dropdown-item"
-                  :class="{ active: activeModule === 'formatCheck' && activeTool === 'uuid' }"
-                  @click="openTool('uuid')"
-                >
-                  UUID在线生成
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    class="sidebar-dropdown-item"
+                    :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
+                    @click="openTool('formatCheck')"
+                  >
+                    格式化校验
+                  </button>
+                  <button
+                    type="button"
+                    class="sidebar-dropdown-item"
+                    :class="{ active: activeModule === 'formatCheck' && activeTool === 'uuid' }"
+                    @click="openTool('uuid')"
+                  >
+                    UUID在线生成
+                  </button>
+                </div>
+              </Teleport>
             </div>
             <button
               v-else
@@ -153,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
@@ -252,6 +263,14 @@ const activeModule = ref('all')
 const activeTool = ref('formatCheck') // formatCheck | uuid
 const toolsMenuOpen = ref(false)
 const toolsMenuTimer = ref(0)
+const toolsAnchorRef = ref(null)
+const toolsMenuStyle = ref({
+  position: 'fixed',
+  left: '-9999px',
+  top: '-9999px',
+  width: '220px',
+  zIndex: 3000
+})
 
 const moduleTabs = [
   { key: 'all', label: '全部' },
@@ -278,17 +297,71 @@ const openTool = (toolKey) => {
 
 const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : '格式化校验'))
 
+const setToolsAnchor = (el) => {
+  if (el) toolsAnchorRef.value = el
+}
+
+const updateToolsMenuPosition = () => {
+  const el = toolsAnchorRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const isNarrowTopNav = window.matchMedia('(max-width: 960px)').matches
+
+  if (isNarrowTopNav) {
+    const left = Math.max(10, Math.min(rect.left, window.innerWidth - 260))
+    const width = Math.max(220, Math.min(rect.width, window.innerWidth - 20))
+    toolsMenuStyle.value = {
+      position: 'fixed',
+      left: `${left}px`,
+      top: `${rect.bottom + 8}px`,
+      width: `${width}px`,
+      zIndex: 3000
+    }
+    return
+  }
+
+  // Left sidebar layout: open to the right of the anchor.
+  const desiredWidth = 260
+  const width = Math.max(220, Math.min(desiredWidth, window.innerWidth - 20))
+  const left = Math.max(10, Math.min(rect.right + 10, window.innerWidth - width - 10))
+  const top = Math.max(10, Math.min(rect.top, window.innerHeight - 160))
+  toolsMenuStyle.value = {
+    position: 'fixed',
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    zIndex: 3000
+  }
+}
+
 const openToolsMenu = () => {
   if (toolsMenuTimer.value) window.clearTimeout(toolsMenuTimer.value)
+  updateToolsMenuPosition()
   toolsMenuOpen.value = true
+  nextTick(() => updateToolsMenuPosition())
 }
 
 const closeToolsMenu = () => {
   if (toolsMenuTimer.value) window.clearTimeout(toolsMenuTimer.value)
   toolsMenuTimer.value = window.setTimeout(() => {
     toolsMenuOpen.value = false
-  }, 150)
+  }, 240)
 }
+
+const onWindowRelayout = () => {
+  if (!toolsMenuOpen.value) return
+  updateToolsMenuPosition()
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', onWindowRelayout, true)
+  window.addEventListener('resize', onWindowRelayout)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onWindowRelayout, true)
+  window.removeEventListener('resize', onWindowRelayout)
+})
 
 // 点击日期，加载对应 md 文件
 const goToHistory = (date) => {
