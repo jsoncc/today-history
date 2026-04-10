@@ -52,7 +52,7 @@
                     :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
                     @click="openTool('formatCheck')"
                   >
-                    格式化校验
+                    JSON格式化校验
                   </button>
                   <button
                     type="button"
@@ -297,7 +297,7 @@ const openTool = (toolKey) => {
   toolsMenuOpen.value = false
 }
 
-const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : '格式化校验'))
+const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : 'JSON格式化校验'))
 
 const setToolsAnchor = (el) => {
   if (el) toolsAnchorRef.value = el
