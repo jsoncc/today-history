@@ -21,12 +21,13 @@
         @scroll="syncScroll"
       />
 
+      <button type="button" class="jfv-copy" :disabled="!inputText" @click="copyInput">复制</button>
       <button type="button" class="jfv-clear" :disabled="!inputText" @click="clearAll">清空</button>
     </div>
 
     <div class="jfv-actionsbar">
       <button type="button" class="jfv-action primary" :disabled="!canRun" @click="run">格式化校验</button>
-      <button type="button" class="jfv-action" :disabled="!inputText" @click="copyInput">复制</button>
+      <button type="button" class="jfv-action" :disabled="!canRun" @click="compressAndCopy">压缩</button>
     </div>
 
     <div
@@ -66,6 +67,31 @@ const canRun = computed(() => Boolean(inputText.value.trim()))
 
 const lineCount = computed(() => Math.max(1, String(inputText.value || '').split('\n').length))
 
+const copyTextToClipboard = async (text) => {
+  const value = String(text ?? '')
+  if (!value) return false
+
+  // Prefer async Clipboard API when available in a secure context.
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return true
+  }
+
+  // Fallback for non-secure contexts (e.g., http://localhost, file://) or blocked permissions.
+  const ta = document.createElement('textarea')
+  ta.value = value
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'fixed'
+  ta.style.left = '-9999px'
+  ta.style.top = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  ta.setSelectionRange(0, ta.value.length)
+  const ok = document.execCommand('copy')
+  document.body.removeChild(ta)
+  return ok
+}
+
 const highlightStyle = computed(() => {
   if (statusKind.value !== 'error' || !errorDetail.value?.line) return {}
   const start = (errorDetail.value.line - 1) * LINE_HEIGHT_PX
@@ -83,9 +109,48 @@ const clearAll = () => {
   errorDetail.value = null
 }
 
+const compressAndCopy = async () => {
+  const raw = inputText.value
+  const trimmed = raw.trim()
+  errorDetail.value = null
+
+  if (!trimmed) return
+
+  try {
+    const parsed = JSON.parse(raw)
+    const compressed = JSON.stringify(parsed)
+    inputText.value = compressed
+    statusKind.value = 'ok'
+    statusText.value = '已压缩为一行'
+    nextTick(() => syncScroll())
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'JSON 解析失败'
+    const pos = extractPositionFromErrorMessage(msg)
+    const { line, column } = pos == null ? { line: 1, column: 1 } : computeLineColumnFromIndex(raw, pos)
+    const lines = raw.split('\n')
+    const lineText = lines[line - 1] ?? ''
+    errorDetail.value = {
+      message: msg,
+      line,
+      column,
+      snippet: buildSnippet(lineText, column)
+    }
+    statusKind.value = 'error'
+    statusText.value = '压缩失败：JSON 解析错误'
+  }
+}
+
 const copyInput = async () => {
   if (!inputText.value) return
-  await navigator.clipboard.writeText(inputText.value)
+  try {
+    const ok = await copyTextToClipboard(inputText.value)
+    if (!ok) throw new Error('copy_failed')
+    statusKind.value = 'ok'
+    statusText.value = '已复制到剪贴板'
+  } catch {
+    statusKind.value = 'error'
+    statusText.value = '复制失败：请手动复制'
+  }
 }
 
 const extractPositionFromErrorMessage = (message) => {
@@ -214,6 +279,24 @@ const run = () => {
   background-repeat: no-repeat;
   background-size: 100% calc(var(--jfv-hl-end, 0px) - var(--jfv-hl-start, 0px));
   background-position: 0 var(--jfv-hl-start, -9999px);
+}
+
+.jfv-copy {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #666;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.jfv-copy:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .jfv-clear {

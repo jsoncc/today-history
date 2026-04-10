@@ -219,7 +219,7 @@ const moduleTabs = [
   { key: 'blog', label: '博客' },
   { key: 'command', label: '命令' },
   { key: 'vpn', label: '科学上网' },
-  { key: 'formatCheck', label: '格式化校验' },
+  { key: 'formatCheck', label: '工具集合' },
   { key: 'translate', label: '翻译' }
 ]
 
