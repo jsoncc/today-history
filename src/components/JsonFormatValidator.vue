@@ -236,6 +236,7 @@ const run = () => {
   border-radius: 2px;
   overflow: hidden;
   min-height: 340px;
+  height: min(60vh, 520px);
 }
 
 .jfv-gutter {
@@ -243,6 +244,7 @@ const run = () => {
   border-right: 1px solid #e6e6e6;
   overflow: hidden;
   padding: 10px 0;
+  height: 100%;
 }
 
 .jfv-gutter-line {
@@ -270,7 +272,7 @@ const run = () => {
   padding: 10px 12px;
   font-size: 14px;
   line-height: 22px;
-  min-height: 340px;
+  height: 100%;
   box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: #333;

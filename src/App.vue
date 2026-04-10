@@ -17,16 +17,51 @@
     <div class="content-layout">
       <aside class="module-sidebar">
         <div class="sidebar-nav">
-          <button
-            v-for="tab in moduleTabs"
-            :key="tab.key"
-            type="button"
-            class="sidebar-item"
-            :class="{ active: activeModule === tab.key }"
-            @click="activeModule = tab.key"
-          >
-            {{ tab.label }}
-          </button>
+          <template v-for="tab in moduleTabs" :key="tab.key">
+            <div
+              v-if="tab.key === 'formatCheck'"
+              class="sidebar-dropdown"
+              :class="{ 'is-open': toolsMenuOpen }"
+              @mouseenter="openToolsMenu"
+              @mouseleave="closeToolsMenu"
+            >
+              <button
+                type="button"
+                class="sidebar-item"
+                :class="{ active: activeModule === tab.key }"
+                @click="openToolsDefault"
+              >
+                {{ tab.label }}
+              </button>
+              <div v-show="toolsMenuOpen" class="sidebar-dropdown-menu" role="menu" aria-label="工具集合">
+                <button
+                  type="button"
+                  class="sidebar-dropdown-item"
+                  :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
+                  @click="openTool('formatCheck')"
+                >
+                  格式化校验
+                </button>
+                <button
+                  type="button"
+                  class="sidebar-dropdown-item"
+                  :class="{ active: activeModule === 'formatCheck' && activeTool === 'uuid' }"
+                  @click="openTool('uuid')"
+                >
+                  UUID在线生成
+                </button>
+              </div>
+            </div>
+            <button
+              v-else
+              type="button"
+              class="sidebar-item"
+              :class="{ active: activeModule === tab.key }"
+              @click="activeModule = tab.key"
+            >
+              {{ tab.label }}
+            </button>
+          </template>
         </div>
       </aside>
 
@@ -105,8 +140,9 @@
 
       <!-- 格式化校验模块 -->
       <div v-if="showModule('formatCheck')" class="list-card format-check-card">
-        <h2 class="module-title">格式化校验</h2>
-        <JsonFormatValidator />
+        <h2 class="module-title">{{ toolsTitle }}</h2>
+        <JsonFormatValidator v-if="activeTool === 'formatCheck'" />
+        <UuidGenerator v-else />
       </div>
       </div>
     </div>
@@ -122,6 +158,7 @@ import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 import JsonFormatValidator from './components/JsonFormatValidator.vue'
+import UuidGenerator from './components/UuidGenerator.vue'
 import blogMeta from './assets/blog/blog-meta.json'
 
 // 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
@@ -212,6 +249,9 @@ const latestVpnHtml = computed(() => {
 const currentMdContent = ref('')
 const showViewer = ref(false)
 const activeModule = ref('all')
+const activeTool = ref('formatCheck') // formatCheck | uuid
+const toolsMenuOpen = ref(false)
+const toolsMenuTimer = ref(0)
 
 const moduleTabs = [
   { key: 'all', label: '全部' },
@@ -224,6 +264,31 @@ const moduleTabs = [
 ]
 
 const showModule = (moduleKey) => activeModule.value === 'all' || activeModule.value === moduleKey
+
+const openToolsDefault = () => {
+  activeModule.value = 'formatCheck'
+  activeTool.value = 'formatCheck'
+}
+
+const openTool = (toolKey) => {
+  activeModule.value = 'formatCheck'
+  activeTool.value = toolKey
+  toolsMenuOpen.value = false
+}
+
+const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : '格式化校验'))
+
+const openToolsMenu = () => {
+  if (toolsMenuTimer.value) window.clearTimeout(toolsMenuTimer.value)
+  toolsMenuOpen.value = true
+}
+
+const closeToolsMenu = () => {
+  if (toolsMenuTimer.value) window.clearTimeout(toolsMenuTimer.value)
+  toolsMenuTimer.value = window.setTimeout(() => {
+    toolsMenuOpen.value = false
+  }, 150)
+}
 
 // 点击日期，加载对应 md 文件
 const goToHistory = (date) => {
