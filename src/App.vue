@@ -188,8 +188,16 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
+<script setup lang="ts">
+import {
+  ref,
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  type CSSProperties,
+  type VNodeRef
+} from 'vue'
 import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
@@ -197,17 +205,47 @@ import JsonFormatValidator from './components/JsonFormatValidator.vue'
 import UuidGenerator from './components/UuidGenerator.vue'
 import blogMeta from './assets/blog/blog-meta.json'
 
+type GlobRawModule = string | { default: string }
+type RawMdMap = Record<string, GlobRawModule>
+
+const rawFromGlob = (mod: GlobRawModule | undefined): string => {
+  if (mod == null) return ''
+  if (typeof mod === 'string') return mod
+  return mod.default ?? ''
+}
+
+type ModuleTabKey = 'all' | 'history' | 'blog' | 'command' | 'vpn' | 'formatCheck' | 'translate'
+type ActiveToolKey = 'formatCheck' | 'uuid'
+
 // 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
-const historyFiles = import.meta.glob('./assets/history/*.md', { eager: true, query: '?raw', import: 'default' })
+const historyFiles = import.meta.glob('./assets/history/*.md', {
+  eager: true,
+  query: '?raw',
+  import: 'default'
+}) as RawMdMap
 
 // 读取 assets/blog 目录下的所有 md 文件
-const blogFiles = import.meta.glob('./assets/blog/*.md', { eager: true, query: '?raw', import: 'default' })
+const blogFiles = import.meta.glob('./assets/blog/*.md', {
+  eager: true,
+  query: '?raw',
+  import: 'default'
+}) as RawMdMap
 
 // 读取 assets/command 目录下的所有 md 文件
-const commandFiles = import.meta.glob('./assets/command/*.md', { eager: true, query: '?raw', import: 'default' })
+const commandFiles = import.meta.glob('./assets/command/*.md', {
+  eager: true,
+  query: '?raw',
+  import: 'default'
+}) as RawMdMap
 
 // 读取 assets/vpn 目录下的所有 md 文件
-const vpnFiles = import.meta.glob('./assets/vpn/*.md', { eager: true, query: '?raw', import: 'default' })
+const vpnFiles = import.meta.glob('./assets/vpn/*.md', {
+  eager: true,
+  query: '?raw',
+  import: 'default'
+}) as RawMdMap
+
+const blogMetaMap = blogMeta as Record<string, number>
 
 // 从文件路径中提取日期并生成 dateList
 const dateList = computed(() => {
@@ -217,8 +255,8 @@ const dateList = computed(() => {
       const match = path.match(/history-(\d{4}-\d{2}-\d{2})\.md$/)
       return match ? match[1] : null
     })
-    .filter(date => date !== null)
-    .sort((a, b) => new Date(b) - new Date(a)) // 按日期降序排列
+    .filter((date): date is string => date !== null)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
     .map(date => ({ date }))
   
   return dates
@@ -226,7 +264,7 @@ const dateList = computed(() => {
 
 // 从文件路径中提取博客文件名并生成 blogList
 const blogList = computed(() => {
-  const meta = blogMeta || {}
+  const meta = blogMetaMap
   const blogs = Object.keys(blogFiles)
     .map(path => {
       // 从路径 ./assets/blog/文件名.md 中提取文件名
@@ -277,21 +315,21 @@ const latestVpnTitle = computed(() => vpnList.value[0]?.name || '')
 const latestVpnHtml = computed(() => {
   const latestPath = vpnList.value[0]?.path
   if (!latestPath || !vpnFiles[latestPath]) return '<p>暂无文档内容</p>'
-  const rawMd = vpnFiles[latestPath].default || vpnFiles[latestPath]
+  const rawMd = rawFromGlob(vpnFiles[latestPath])
   const cleaned = String(rawMd).replace(/^---[\s\S]*?---\s*/, '')
-  return marked.parse(cleaned)
+  return String(marked.parse(cleaned))
 })
 
 const currentMdContent = ref('')
 const showViewer = ref(false)
-const activeModule = ref('all')
-const activeTool = ref('formatCheck') // formatCheck | uuid
+const activeModule = ref<ModuleTabKey>('all')
+const activeTool = ref<ActiveToolKey>('formatCheck')
 const toolsMenuOpen = ref(false)
 const toolsMenuTimer = ref(0)
-const toolsAnchorRef = ref(null)
+const toolsAnchorRef = ref<HTMLButtonElement | null>(null)
 const nowText = ref('')
 let clockTimer = 0
-const toolsMenuStyle = ref({
+const toolsMenuStyle = ref<CSSProperties>({
   position: 'fixed',
   left: '-9999px',
   top: '-9999px',
@@ -299,7 +337,7 @@ const toolsMenuStyle = ref({
   zIndex: 3000
 })
 
-const moduleTabs = [
+const moduleTabs: { key: ModuleTabKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'history', label: '历史上的今天' },
   { key: 'blog', label: '博客' },
@@ -309,14 +347,15 @@ const moduleTabs = [
   { key: 'translate', label: '翻译' }
 ]
 
-const showModule = (moduleKey) => activeModule.value === 'all' || activeModule.value === moduleKey
+const showModule = (moduleKey: ModuleTabKey) =>
+  activeModule.value === 'all' || activeModule.value === moduleKey
 
 const openToolsDefault = () => {
   activeModule.value = 'formatCheck'
   activeTool.value = 'formatCheck'
 }
 
-const openTool = (toolKey) => {
+const openTool = (toolKey: ActiveToolKey) => {
   activeModule.value = 'formatCheck'
   activeTool.value = toolKey
   toolsMenuOpen.value = false
@@ -324,8 +363,8 @@ const openTool = (toolKey) => {
 
 const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : 'JSON格式化校验'))
 
-const setToolsAnchor = (el) => {
-  if (el) toolsAnchorRef.value = el
+const setToolsAnchor: VNodeRef = (el) => {
+  toolsAnchorRef.value = el instanceof HTMLButtonElement ? el : null
 }
 
 const updateToolsMenuPosition = () => {
@@ -399,7 +438,7 @@ onMounted(() => {
   nowText.value = formatNow()
   clockTimer = window.setInterval(() => {
     nowText.value = formatNow()
-  }, 1000)
+  }, 1000) as number
 
   // Re-position the menu when the page/layout scrolls or resizes.
   window.addEventListener('scroll', onWindowRelayout, true)
@@ -413,39 +452,47 @@ onBeforeUnmount(() => {
 })
 
 // 点击日期，加载对应 md 文件
-const goToHistory = (date) => {
+const goToHistory = (date: string) => {
   const filePath = `./assets/history/history-${date}.md`
   if (historyFiles[filePath]) {
-    currentMdContent.value = historyFiles[filePath].default || historyFiles[filePath]
+    currentMdContent.value = rawFromGlob(historyFiles[filePath])
     showViewer.value = true
   }
 }
 
 // 点击博客，加载对应 md 文件
-const goToBlog = (path) => {
+const goToBlog = (path: string) => {
   if (blogFiles[path]) {
-    currentMdContent.value = blogFiles[path].default || blogFiles[path]
+    currentMdContent.value = rawFromGlob(blogFiles[path])
     showViewer.value = true
   }
 }
 
 // 点击命令，加载对应 md 文件
-const goToCommand = (path) => {
+const goToCommand = (path: string) => {
   if (commandFiles[path]) {
-    currentMdContent.value = commandFiles[path].default || commandFiles[path]
+    currentMdContent.value = rawFromGlob(commandFiles[path])
     showViewer.value = true
   }
 }
 
 // 点击VPN，加载对应 md 文件
-const goToVpn = (path) => {
+const goToVpn = (path: string) => {
   if (vpnFiles[path]) {
-    currentMdContent.value = vpnFiles[path].default || vpnFiles[path]
+    currentMdContent.value = rawFromGlob(vpnFiles[path])
     showViewer.value = true
   }
 }
 
-const listModules = computed(() => [
+type ListModuleKey = 'history' | 'blog' | 'command' | 'vpn'
+
+interface ListModule {
+  key: ListModuleKey
+  title: string
+  items: { key: string; label: string; value: string; href: string }[]
+}
+
+const listModules = computed((): ListModule[] => [
   {
     key: 'history',
     title: '历史上的今天',
@@ -488,7 +535,7 @@ const listModules = computed(() => [
   }
 ])
 
-const openModuleItem = (moduleKey, value) => {
+const openModuleItem = (moduleKey: string, value: string) => {
   switch (moduleKey) {
     case 'history':
       goToHistory(value)
@@ -539,7 +586,7 @@ const translateApiUrl = () => {
 }
 
 /** 推断百度 API 的 target：中文为主 → 译成 en；英文为主 → 译成 zh */
-const inferTargetLang = (text) => {
+const inferTargetLang = (text: string): 'en' | 'zh' | null => {
   const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length
   const latin = (text.match(/[a-zA-Z]/g) || []).length
   if (cjk === 0 && latin === 0) return null
@@ -623,7 +670,11 @@ const runTranslate = async () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: body.toString()
     })
-    const data = await res.json()
+    const data = (await res.json()) as {
+      error_code?: string | number
+      error_msg?: string
+      trans_result?: { dst: string }[]
+    }
     if (data.error_code != null) {
       const code = data.error_code
       const msg = data.error_msg || '百度翻译接口错误'

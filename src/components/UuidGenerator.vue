@@ -60,17 +60,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-const countOptions = [1, 5, 10, 20, 50, 100]
-const countSelection = ref('1') // "1" | "5" | ... | "custom"
+const countOptions = [1, 5, 10, 20, 50, 100] as const
+const countSelection = ref<string>('1')
 const customCount = ref(1)
 const countHint = ref('')
-const casing = ref('lower') // lower | upper
+const casing = ref<'lower' | 'upper'>('lower')
 const noHyphen = ref(false)
 const resultText = ref('')
-const statusKind = ref('idle') // idle | ok | error
+const statusKind = ref<'idle' | 'ok' | 'error'>('idle')
 const statusText = ref('')
 
 const effectiveCount = computed(() => {
@@ -100,8 +100,8 @@ watch([countSelection, customCount], () => {
   countHint.value = ''
 })
 
-const onCustomCountInput = (e) => {
-  const v = Number(e?.target?.value)
+const onCustomCountInput = (e: Event) => {
+  const v = Number((e.target as HTMLInputElement)?.value)
   if (!Number.isFinite(v)) {
     countHint.value = '请输入 1-100'
   } else if (v > 100) {
@@ -125,7 +125,7 @@ const normalizeCustomCount = () => {
   countHint.value = ''
 }
 
-const formatUuid = (value) => {
+const formatUuid = (value: string) => {
   const cased = casing.value === 'upper' ? String(value).toUpperCase() : String(value).toLowerCase()
   return noHyphen.value ? cased.replaceAll('-', '') : cased
 }
@@ -141,7 +141,7 @@ const genUuid = () => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-const copyTextToClipboard = async (text) => {
+const copyTextToClipboard = async (text: string) => {
   const value = String(text ?? '')
   if (!value) return false
 

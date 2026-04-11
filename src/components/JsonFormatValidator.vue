@@ -51,15 +51,24 @@
   </div>
 </template>
 
-<script setup>
-import { computed, nextTick, ref } from 'vue'
+<script setup lang="ts">
+import { computed, nextTick, ref, type CSSProperties } from 'vue'
+
+type StatusKind = 'idle' | 'ok' | 'error'
+
+interface JsonErrorDetail {
+  message: string
+  line: number
+  column: number
+  snippet: string
+}
 
 const inputText = ref('')
-const statusKind = ref('idle') // idle | ok | error
+const statusKind = ref<StatusKind>('idle')
 const statusText = ref('请输入 JSON 后点击“格式化校验”')
-const errorDetail = ref(null)
-const textareaRef = ref(null)
-const gutterRef = ref(null)
+const errorDetail = ref<JsonErrorDetail | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const gutterRef = ref<HTMLDivElement | null>(null)
 
 const LINE_HEIGHT_PX = 22
 
@@ -67,7 +76,7 @@ const canRun = computed(() => Boolean(inputText.value.trim()))
 
 const lineCount = computed(() => Math.max(1, String(inputText.value || '').split('\n').length))
 
-const copyTextToClipboard = async (text) => {
+const copyTextToClipboard = async (text: string) => {
   const value = String(text ?? '')
   if (!value) return false
 
@@ -92,14 +101,14 @@ const copyTextToClipboard = async (text) => {
   return ok
 }
 
-const highlightStyle = computed(() => {
+const highlightStyle = computed((): CSSProperties => {
   if (statusKind.value !== 'error' || !errorDetail.value?.line) return {}
   const start = (errorDetail.value.line - 1) * LINE_HEIGHT_PX
   const end = start + LINE_HEIGHT_PX
   return {
     '--jfv-hl-start': `${start}px`,
     '--jfv-hl-end': `${end}px`
-  }
+  } as CSSProperties
 })
 
 const clearAll = () => {
@@ -153,14 +162,14 @@ const copyInput = async () => {
   }
 }
 
-const extractPositionFromErrorMessage = (message) => {
+const extractPositionFromErrorMessage = (message: string) => {
   const m = String(message || '').match(/position\s+(\d+)/i)
   if (!m) return null
   const pos = Number(m[1])
   return Number.isFinite(pos) ? pos : null
 }
 
-const computeLineColumnFromIndex = (text, index) => {
+const computeLineColumnFromIndex = (text: string, index: number) => {
   const safeIndex = Math.max(0, Math.min(Number(index || 0), text.length))
   const before = text.slice(0, safeIndex)
   const lines = before.split('\n')
@@ -169,7 +178,7 @@ const computeLineColumnFromIndex = (text, index) => {
   return { line, column }
 }
 
-const buildSnippet = (lineText, column) => {
+const buildSnippet = (lineText: string, column: number) => {
   const col = Math.max(1, Number(column || 1))
   const caretPad = ' '.repeat(Math.max(0, col - 1))
   return `${lineText}\n${caretPad}^`

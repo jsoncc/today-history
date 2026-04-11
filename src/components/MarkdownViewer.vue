@@ -15,16 +15,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { marked } from 'marked'
 
-const props = defineProps(['mdContent'])
-const emit = defineEmits(['close'])
+const props = defineProps<{ mdContent?: string }>()
+const emit = defineEmits<{ close: [] }>()
 const htmlContent = ref('')
-const imageFiles = import.meta.glob('../assets/images/**/*', { eager: true, import: 'default' })
+const imageFiles = import.meta.glob('../assets/images/**/*', {
+  eager: true,
+  import: 'default'
+}) as Record<string, string>
 
-const resolveMarkdownImage = (rawUrl) => {
+const resolveMarkdownImage = (rawUrl: string) => {
   const url = String(rawUrl || '').trim()
   if (!url) return url
   if (/^(https?:)?\/\//.test(url) || url.startsWith('data:') || url.startsWith('#')) {
@@ -46,7 +49,7 @@ const closeModal = () => {
 
 const copyAllContent = async () => {
   try {
-    const textContent = props.mdContent.replace(/^---[\s\S]*?---\s*/, '')
+    const textContent = (props.mdContent ?? '').replace(/^---[\s\S]*?---\s*/, '')
     await navigator.clipboard.writeText(textContent)
     alert('内容已复制到剪贴板')
   } catch (err) {
@@ -64,14 +67,14 @@ const processMarkdown = () => {
   let mdText = props.mdContent.replace(/^---[\s\S]*?---\s*/, '')
 
   // 解析 Markdown 相对图片路径（支持带空格路径与 <...> 包裹写法）到 Vite 资源 URL
-  mdText = mdText.replace(/!\[([^\]]*)\]\((<[^>]+>|[^)]+)\)/g, (_, alt, rawUrl) => {
+  mdText = mdText.replace(/!\[([^\]]*)\]\((<[^>]+>|[^)]+)\)/g, (_m, alt: string, rawUrl: string) => {
     const normalizedUrl = String(rawUrl || '').trim().replace(/^<|>$/g, '')
     const resolved = resolveMarkdownImage(normalizedUrl)
     return `![${alt}](${resolved})`
   })
   
   // 用 marked 把 Markdown 转成 HTML
-  htmlContent.value = marked.parse(mdText)
+  htmlContent.value = String(marked.parse(mdText))
 }
 
 // 监听 mdContent 的变化

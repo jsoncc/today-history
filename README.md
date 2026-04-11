@@ -17,7 +17,7 @@
 
 ## 技术栈
 
-- `vue@3`
+- `vue@3` + `typescript`
 - `vite@5`
 - `marked`（Markdown 渲染）
 - `crypto-js`（百度翻译签名 MD5）

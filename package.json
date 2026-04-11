@@ -7,8 +7,9 @@
     "predev": "node generate-blog-meta.mjs",
     "dev": "vite",
     "prebuild": "node generate-blog-meta.mjs",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
@@ -16,7 +17,11 @@
     "vue": "^3.4.0"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.0.0",
-    "vite": "^5.0.0"
+    "typescript": "~5.7.2",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.1.10"
   }
 }
