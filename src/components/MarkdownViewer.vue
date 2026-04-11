@@ -16,6 +16,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 全屏弹窗：把 Markdown 渲染成 HTML；支持把 md 里 images/ 相对路径换成 Vite 打包后的资源 URL。
+ */
 import { ref, watch } from 'vue'
 import { marked } from 'marked'
 
@@ -27,6 +30,7 @@ const imageFiles = import.meta.glob('../assets/images/**/*', {
   import: 'default'
 }) as Record<string, string>
 
+/** 外链、data:、# 保持原样；仅处理 images/ 开头的相对路径 */
 const resolveMarkdownImage = (rawUrl: string) => {
   const url = String(rawUrl || '').trim()
   if (!url) return url
@@ -66,18 +70,15 @@ const processMarkdown = () => {
   
   let mdText = props.mdContent.replace(/^---[\s\S]*?---\s*/, '')
 
-  // 解析 Markdown 相对图片路径（支持带空格路径与 <...> 包裹写法）到 Vite 资源 URL
   mdText = mdText.replace(/!\[([^\]]*)\]\((<[^>]+>|[^)]+)\)/g, (_m, alt: string, rawUrl: string) => {
     const normalizedUrl = String(rawUrl || '').trim().replace(/^<|>$/g, '')
     const resolved = resolveMarkdownImage(normalizedUrl)
     return `![${alt}](${resolved})`
   })
   
-  // 用 marked 把 Markdown 转成 HTML
   htmlContent.value = String(marked.parse(mdText))
 }
 
-// 监听 mdContent 的变化
 watch(() => props.mdContent, () => {
   processMarkdown()
 }, { immediate: true })
@@ -178,13 +179,6 @@ watch(() => props.mdContent, () => {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
-}
-
-.loading {
-  text-align: center;
-  font-size: 18px;
-  color: #666;
-  padding: 50px 0;
 }
 
 .markdown-content {

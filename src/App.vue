@@ -43,7 +43,7 @@
                 >
                   {{ tab.label }}
                 </button>
-                <!-- Menu is teleported to body so it won't be clipped by the nav's scroll/overflow. -->
+                <!-- 挂到 body，避免侧栏 overflow 把菜单裁掉 -->
                 <Teleport to="body">
                   <div
                     v-show="toolsMenuOpen"
@@ -54,7 +54,6 @@
                     @mouseenter="openToolsMenu"
                     @mouseleave="closeToolsMenu"
                   >
-                    <!-- Keep menu open while hovering the panel itself. -->
                     <button
                       type="button"
                       class="sidebar-dropdown-item"
@@ -189,6 +188,10 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 站点主界面：侧栏切换模块、Markdown 列表/弹窗阅读、百度翻译、JSON/UUID 工具。
+ * 业务数据主要来自 src/assets 下各目录的 .md（由 Vite glob 打包）。
+ */
 import {
   ref,
   computed,
@@ -205,6 +208,7 @@ import JsonFormatValidator from './components/JsonFormatValidator.vue'
 import UuidGenerator from './components/UuidGenerator.vue'
 import blogMeta from './assets/blog/blog-meta.json'
 
+/** Vite ?raw 导入在 eager glob 里可能是 string 或 { default: string } */
 type GlobRawModule = string | { default: string }
 type RawMdMap = Record<string, GlobRawModule>
 
@@ -217,41 +221,38 @@ const rawFromGlob = (mod: GlobRawModule | undefined): string => {
 type ModuleTabKey = 'all' | 'history' | 'blog' | 'command' | 'vpn' | 'formatCheck' | 'translate'
 type ActiveToolKey = 'formatCheck' | 'uuid'
 
-// 使用 import.meta.glob 自动读取 assets/history 目录下的所有 md 文件（作为原始文本）
+// —— Markdown 原始文件（构建期打包；key 为形如 ./assets/... 的路径）——
 const historyFiles = import.meta.glob('./assets/history/*.md', {
   eager: true,
   query: '?raw',
   import: 'default'
 }) as RawMdMap
 
-// 读取 assets/blog 目录下的所有 md 文件
 const blogFiles = import.meta.glob('./assets/blog/*.md', {
   eager: true,
   query: '?raw',
   import: 'default'
 }) as RawMdMap
 
-// 读取 assets/command 目录下的所有 md 文件
 const commandFiles = import.meta.glob('./assets/command/*.md', {
   eager: true,
   query: '?raw',
   import: 'default'
 }) as RawMdMap
 
-// 读取 assets/vpn 目录下的所有 md 文件
 const vpnFiles = import.meta.glob('./assets/vpn/*.md', {
   eager: true,
   query: '?raw',
   import: 'default'
 }) as RawMdMap
 
+/** 由 scripts/generate-blog-meta.ts 生成：博客文件路径 → 最后更新时间（Unix 秒） */
 const blogMetaMap = blogMeta as Record<string, number>
 
-// 从文件路径中提取日期并生成 dateList
+// —— 各模块在侧栏展示的列表（由 glob 的 key 解析而来）——
 const dateList = computed(() => {
   const dates = Object.keys(historyFiles)
     .map(path => {
-      // 从路径 ./assets/history/history-2026-03-30.md 中提取日期 2026-03-30
       const match = path.match(/history-(\d{4}-\d{2}-\d{2})\.md$/)
       return match ? match[1] : null
     })
@@ -262,7 +263,6 @@ const dateList = computed(() => {
   return dates
 })
 
-// 从文件路径中提取博客文件名并生成 blogList
 const blogList = computed(() => {
   const meta = blogMetaMap
   const blogs = Object.keys(blogFiles)
@@ -283,7 +283,6 @@ const blogList = computed(() => {
   return blogs
 })
 
-// 从文件路径中提取命令文件名并生成 commandList
 const commandList = computed(() => {
   const commands = Object.keys(commandFiles)
     .map(path => {
@@ -296,7 +295,6 @@ const commandList = computed(() => {
   return commands
 })
 
-// 从文件路径中提取VPN文件名并生成 vpnList
 const vpnList = computed(() => {
   const vpns = Object.keys(vpnFiles)
     .map(path => {
@@ -310,6 +308,7 @@ const vpnList = computed(() => {
   return vpns
 })
 
+/** 「科学上网」单模块视图下：默认展开排序后的第一篇（列表按名称排，首项即展示内容） */
 const latestVpnTitle = computed(() => vpnList.value[0]?.name || '')
 
 const latestVpnHtml = computed(() => {
@@ -320,6 +319,7 @@ const latestVpnHtml = computed(() => {
   return String(marked.parse(cleaned))
 })
 
+// —— UI 状态 ——
 const currentMdContent = ref('')
 const showViewer = ref(false)
 const activeModule = ref<ModuleTabKey>('all')
@@ -337,6 +337,7 @@ const toolsMenuStyle = ref<CSSProperties>({
   zIndex: 3000
 })
 
+/** 左侧一级导航（顺序即展示顺序） */
 const moduleTabs: { key: ModuleTabKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'history', label: '历史上的今天' },
@@ -347,6 +348,7 @@ const moduleTabs: { key: ModuleTabKey; label: string }[] = [
   { key: 'translate', label: '翻译' }
 ]
 
+/** 「全部」时所有模块都显示；选中某一模块时只显示该块 */
 const showModule = (moduleKey: ModuleTabKey) =>
   activeModule.value === 'all' || activeModule.value === moduleKey
 
@@ -363,10 +365,12 @@ const openTool = (toolKey: ActiveToolKey) => {
 
 const toolsTitle = computed(() => (activeTool.value === 'uuid' ? 'UUID在线生成' : 'JSON格式化校验'))
 
+/** 记录「工具集合」按钮的 DOM，用于把下拉菜单对齐到按钮旁 */
 const setToolsAnchor: VNodeRef = (el) => {
   toolsAnchorRef.value = el instanceof HTMLButtonElement ? el : null
 }
 
+/** 窄屏顶栏 / 宽屏侧栏两种布局下，下拉菜单位置不同 */
 const updateToolsMenuPosition = () => {
   const el = toolsAnchorRef.value
   if (!el) return
@@ -374,7 +378,6 @@ const updateToolsMenuPosition = () => {
   const isNarrowTopNav = window.matchMedia('(max-width: 960px)').matches
 
   if (isNarrowTopNav) {
-    // Top nav: open downward, aligned to the anchor.
     const left = Math.max(10, Math.min(rect.left, window.innerWidth - 260))
     const width = Math.max(220, Math.min(rect.width, window.innerWidth - 20))
     toolsMenuStyle.value = {
@@ -387,7 +390,6 @@ const updateToolsMenuPosition = () => {
     return
   }
 
-  // Left sidebar: open to the right so it doesn't cover the nav list.
   const desiredWidth = 260
   const width = Math.max(220, Math.min(desiredWidth, window.innerWidth - 20))
   const left = Math.max(10, Math.min(rect.right + 10, window.innerWidth - width - 10))
@@ -410,7 +412,7 @@ const openToolsMenu = () => {
 
 const closeToolsMenu = () => {
   if (toolsMenuTimer.value) window.clearTimeout(toolsMenuTimer.value)
-  // Delay close slightly so moving the mouse doesn't collapse the menu.
+  // 延迟收起，避免从按钮移入菜单时闪断
   toolsMenuTimer.value = window.setTimeout(() => {
     toolsMenuOpen.value = false
   }, 240)
@@ -421,6 +423,7 @@ const onWindowRelayout = () => {
   updateToolsMenuPosition()
 }
 
+// —— 页头实时时钟 ——
 const formatNow = () => {
   const now = new Date()
   const y = now.getFullYear()
@@ -440,7 +443,6 @@ onMounted(() => {
     nowText.value = formatNow()
   }, 1000) as number
 
-  // Re-position the menu when the page/layout scrolls or resizes.
   window.addEventListener('scroll', onWindowRelayout, true)
   window.addEventListener('resize', onWindowRelayout)
 })
@@ -451,37 +453,12 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowRelayout)
 })
 
-// 点击日期，加载对应 md 文件
-const goToHistory = (date: string) => {
-  const filePath = `./assets/history/history-${date}.md`
-  if (historyFiles[filePath]) {
-    currentMdContent.value = rawFromGlob(historyFiles[filePath])
-    showViewer.value = true
-  }
-}
-
-// 点击博客，加载对应 md 文件
-const goToBlog = (path: string) => {
-  if (blogFiles[path]) {
-    currentMdContent.value = rawFromGlob(blogFiles[path])
-    showViewer.value = true
-  }
-}
-
-// 点击命令，加载对应 md 文件
-const goToCommand = (path: string) => {
-  if (commandFiles[path]) {
-    currentMdContent.value = rawFromGlob(commandFiles[path])
-    showViewer.value = true
-  }
-}
-
-// 点击VPN，加载对应 md 文件
-const goToVpn = (path: string) => {
-  if (vpnFiles[path]) {
-    currentMdContent.value = rawFromGlob(vpnFiles[path])
-    showViewer.value = true
-  }
+/** 根据 glob 表中的路径打开 Markdown 弹窗 */
+const openMdFromMap = (map: RawMdMap, filePath: string) => {
+  const mod = map[filePath]
+  if (!mod) return
+  currentMdContent.value = rawFromGlob(mod)
+  showViewer.value = true
 }
 
 type ListModuleKey = 'history' | 'blog' | 'command' | 'vpn'
@@ -535,32 +512,31 @@ const listModules = computed((): ListModule[] => [
   }
 ])
 
-const openModuleItem = (moduleKey: string, value: string) => {
+const openModuleItem = (moduleKey: ListModuleKey, value: string) => {
   switch (moduleKey) {
     case 'history':
-      goToHistory(value)
+      openMdFromMap(historyFiles, `./assets/history/history-${value}.md`)
       break
     case 'blog':
-      goToBlog(value)
+      openMdFromMap(blogFiles, value)
       break
     case 'command':
-      goToCommand(value)
+      openMdFromMap(commandFiles, value)
       break
     case 'vpn':
-      goToVpn(value)
+      openMdFromMap(vpnFiles, value)
       break
     default:
       break
   }
 }
 
-// 关闭详情弹窗
 const closeViewer = () => {
   showViewer.value = false
   currentMdContent.value = ''
 }
 
-// 翻译：百度翻译开放平台通用翻译 API（开发/preview 走 Vite 代理 /baidu-fanyi 避免 CORS）
+// —— 百度翻译（签名在前端；生产需 Worker 或同源代理，见 vite 配置 /baidu-fanyi）——
 const translateSource = ref('')
 const translateResult = ref('')
 const translateLoading = ref(false)
@@ -574,7 +550,7 @@ const baiduTranslateConfigured = computed(
   () => Boolean(String(baiduAppId || '').trim() && String(baiduSecret || '').trim())
 )
 
-/** GitHub Pages 等静态部署无法直连百度（无 CORS），必须配置可转发的 URL */
+/** 生产环境未配 VITE_BAIDU_TRANSLATE_URL 时浏览器无法直连百度域名 */
 const baiduTranslateNeedsProxy = computed(
   () => import.meta.env.PROD && !baiduTranslateUrlEnv
 )
@@ -625,6 +601,7 @@ const canTranslate = computed(() => {
   )
 })
 
+/** 百度通用翻译接口对单次 q 的字节上限（约值，与官方文档一致的量级） */
 const BAIDU_Q_MAX_BYTES = 6000
 
 const runTranslate = async () => {

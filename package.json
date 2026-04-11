@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node generate-blog-meta.mjs",
+    "predev": "tsx scripts/generate-blog-meta.ts",
     "dev": "vite",
-    "prebuild": "node generate-blog-meta.mjs",
+    "prebuild": "tsx scripts/generate-blog-meta.ts",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
@@ -20,6 +20,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.0.0",
+    "tsx": "^4.19.2",
     "typescript": "~5.7.2",
     "vite": "^5.0.0",
     "vue-tsc": "^2.1.10"

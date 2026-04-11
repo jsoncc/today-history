@@ -61,6 +61,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 批量生成 UUID（crypto.randomUUID / 降级实现），支持个数、大小写、是否带连字符。
+ */
 import { computed, ref, watch } from 'vue'
 
 const countOptions = [1, 5, 10, 20, 50, 100] as const
@@ -173,7 +176,7 @@ const generate = () => {
     resultText.value = list.join('\n')
     statusKind.value = 'ok'
     statusText.value = '已生成'
-  } catch (e) {
+  } catch {
     resultText.value = ''
     statusKind.value = 'error'
     statusText.value = '生成失败'

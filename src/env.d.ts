@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/** Vue 单文件组件、Vite 注入的环境变量类型声明 */
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'

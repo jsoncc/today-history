@@ -1,19 +1,14 @@
 /**
- * Cloudflare Worker：把浏览器 POST 原样转发到百度翻译 API，解决 GitHub Pages 等静态站的跨域问题。
+ * Cloudflare Worker：浏览器 POST 原样转发到百度翻译 API，解决 GitHub Pages 静态站无法直连（CORS）的问题。
  *
- * 部署（需 Node 与 Cloudflare 账号）：
- *   cd workers
- *   npx wrangler login
- *   npx wrangler deploy
+ * 部署：cd workers → npx wrangler login → npx wrangler deploy
+ * 将得到的 https://xxx.workers.dev 写入 GitHub Secret：VITE_BAIDU_TRANSLATE_URL
  *
- * 部署成功后得到 https://xxx.workers.dev ，在 GitHub 仓库 Settings → Secrets and variables → Actions
- * 增加 VITE_BAIDU_TRANSLATE_URL=https://xxx.workers.dev（不要末尾斜杠也可）
- *
- * 注意：本 Worker 不保存密钥；签名仍由前端计算（与当前项目一致）。
+ * 密钥仍只在前端用环境变量配置；本 Worker 只做转发，不存 appid/secret。
  */
 export default {
-  async fetch(request) {
-    const cors = {
+  async fetch(request: Request): Promise<Response> {
+    const cors: Record<string, string> = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'

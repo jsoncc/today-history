@@ -29,12 +29,17 @@
 
 ```text
 .
-├─ generate-blog-meta.mjs      # 生成博客更新时间元数据（基于 Git 提交时间）
+├─ scripts/
+│  └─ generate-blog-meta.ts    # 生成博客更新时间元数据（基于 Git 提交时间）
 ├─ src/
 │  ├─ App.vue
 │  ├─ App.css
+│  ├─ main.ts
+│  ├─ env.d.ts
 │  ├─ components/
-│  │  └─ MarkdownViewer.vue
+│  │  ├─ MarkdownViewer.vue
+│  │  ├─ JsonFormatValidator.vue
+│  │  └─ UuidGenerator.vue
 │  └─ assets/
 │     ├─ history/      # 历史内容：history-YYYY-MM-DD.md
 │     ├─ blog/         # 博客内容：*.md
@@ -43,11 +48,12 @@
 │     ├─ vpn/          # VPN 文档：*.md
 │     └─ images/       # Markdown 内图片资源
 ├─ workers/
-│  ├─ baidu-proxy.js   # Cloudflare Worker 转发百度翻译接口
+│  ├─ baidu-proxy.ts   # Cloudflare Worker 转发百度翻译接口
 │  └─ wrangler.toml
 ├─ .github/workflows/
 │  └─ deploy.yml       # GitHub Pages 部署流程
-├─ vite.config.js
+├─ vite.config.ts
+├─ tsconfig.json
 └─ .env.example
 ```
 
@@ -78,7 +84,7 @@ VITE_BAIDU_SECRET=你的百度翻译密钥
 npm run dev
 ```
 
-> `npm run dev` / `npm run build` 前会自动执行 `generate-blog-meta.mjs`，用于刷新博客更新时间排序数据。
+> `npm run dev` / `npm run build` 前会自动执行 `scripts/generate-blog-meta.ts`（经 `tsx`），用于刷新博客更新时间排序数据。
 
 ---
 
@@ -172,7 +178,7 @@ npm run build
 npm run preview
 
 # 手动刷新博客更新时间元数据（一般不需要，dev/build 会自动执行）
-node generate-blog-meta.mjs
+npx tsx scripts/generate-blog-meta.ts
 ```
 
 ---

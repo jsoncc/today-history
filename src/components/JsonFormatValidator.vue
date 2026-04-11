@@ -52,6 +52,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * JSON 格式化 / 校验 / 压缩：左侧行号 gutter 与 textarea 同步滚动；错误时在对应行做浅色高亮。
+ */
 import { computed, nextTick, ref, type CSSProperties } from 'vue'
 
 type StatusKind = 'idle' | 'ok' | 'error'
@@ -60,7 +63,6 @@ interface JsonErrorDetail {
   message: string
   line: number
   column: number
-  snippet: string
 }
 
 const inputText = ref('')
@@ -70,23 +72,23 @@ const errorDetail = ref<JsonErrorDetail | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const gutterRef = ref<HTMLDivElement | null>(null)
 
+/** 与 gutter 单行高度一致，用于把错误行映射成 textarea 背景高亮条 */
 const LINE_HEIGHT_PX = 22
 
 const canRun = computed(() => Boolean(inputText.value.trim()))
 
 const lineCount = computed(() => Math.max(1, String(inputText.value || '').split('\n').length))
 
+/** 优先 Clipboard API；非 https 等环境降级为 execCommand */
 const copyTextToClipboard = async (text: string) => {
   const value = String(text ?? '')
   if (!value) return false
 
-  // Prefer async Clipboard API when available in a secure context.
   if (window.isSecureContext && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value)
     return true
   }
 
-  // Fallback for non-secure contexts (e.g., http://localhost, file://) or blocked permissions.
   const ta = document.createElement('textarea')
   ta.value = value
   ta.setAttribute('readonly', '')
@@ -118,7 +120,7 @@ const clearAll = () => {
   errorDetail.value = null
 }
 
-const compressAndCopy = async () => {
+const compressAndCopy = () => {
   const raw = inputText.value
   const trimmed = raw.trim()
   errorDetail.value = null
@@ -136,13 +138,10 @@ const compressAndCopy = async () => {
     const msg = e instanceof Error ? e.message : 'JSON 解析失败'
     const pos = extractPositionFromErrorMessage(msg)
     const { line, column } = pos == null ? { line: 1, column: 1 } : computeLineColumnFromIndex(raw, pos)
-    const lines = raw.split('\n')
-    const lineText = lines[line - 1] ?? ''
     errorDetail.value = {
       message: msg,
       line,
-      column,
-      snippet: buildSnippet(lineText, column)
+      column
     }
     statusKind.value = 'error'
     statusText.value = '压缩失败：JSON 解析错误'
@@ -178,12 +177,6 @@ const computeLineColumnFromIndex = (text: string, index: number) => {
   return { line, column }
 }
 
-const buildSnippet = (lineText: string, column: number) => {
-  const col = Math.max(1, Number(column || 1))
-  const caretPad = ' '.repeat(Math.max(0, col - 1))
-  return `${lineText}\n${caretPad}^`
-}
-
 const syncScroll = () => {
   const ta = textareaRef.value
   const gutter = gutterRef.value
@@ -212,15 +205,11 @@ const run = () => {
     const msg = e instanceof Error ? e.message : 'JSON 解析失败'
     const pos = extractPositionFromErrorMessage(msg)
     const { line, column } = pos == null ? { line: 1, column: 1 } : computeLineColumnFromIndex(raw, pos)
-    const lines = raw.split('\n')
-    const lineText = lines[line - 1] ?? ''
-    const detail = {
+    errorDetail.value = {
       message: msg,
       line,
-      column,
-      snippet: buildSnippet(lineText, column)
+      column
     }
-    errorDetail.value = detail
     statusKind.value = 'error'
     statusText.value = `第 ${line} 行解析错误：`
     nextTick(async () => {
