@@ -1,164 +1,180 @@
 <template>
   <div class="home">
-    <h1 class="page-title">主页</h1>
-    <p class="page-subtitle">作者：JsonCC · 每天都有新内容</p>
-    <p class="repo-cta">
-      项目源码与更新：
-      <a
-        href="https://github.com/jsoncc/today-history"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="repo-link"
-      >
-        GitHub - jsoncc/today-history
-      </a>
-    </p>
-    
-    <div class="content-layout">
-      <aside class="module-sidebar">
-        <div class="sidebar-nav">
-          <template v-for="tab in moduleTabs" :key="tab.key">
-            <div
-              v-if="tab.key === 'formatCheck'"
-              class="sidebar-dropdown"
-              :class="{ 'is-open': toolsMenuOpen }"
-              @mouseenter="openToolsMenu"
-              @mouseleave="closeToolsMenu"
-            >
+    <header class="page-header">
+      <div class="header-left">
+        <h1 class="page-title">主页</h1>
+        <p class="repo-cta">
+          项目源码与更新：
+          <a
+            href="https://github.com/jsoncc/today-history"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="repo-link"
+          >
+            GitHub - jsoncc/today-history
+          </a>
+        </p>
+      </div>
+      <p class="header-time">
+        <span class="header-time-icon" aria-hidden="true" />
+        {{ nowText }}
+      </p>
+      <div class="header-right" aria-hidden="true" />
+    </header>
+
+    <main class="page-main">
+      <div class="content-layout">
+        <aside class="module-sidebar">
+          <div class="sidebar-nav">
+            <template v-for="tab in moduleTabs" :key="tab.key">
+              <div
+                v-if="tab.key === 'formatCheck'"
+                class="sidebar-dropdown"
+                :class="{ 'is-open': toolsMenuOpen }"
+                @mouseenter="openToolsMenu"
+                @mouseleave="closeToolsMenu"
+              >
+                <button
+                  type="button"
+                  class="sidebar-item"
+                  :class="{ active: activeModule === tab.key }"
+                  @click="openToolsDefault"
+                  :ref="setToolsAnchor"
+                >
+                  {{ tab.label }}
+                </button>
+                <!-- Menu is teleported to body so it won't be clipped by the nav's scroll/overflow. -->
+                <Teleport to="body">
+                  <div
+                    v-show="toolsMenuOpen"
+                    class="sidebar-dropdown-menu"
+                    role="menu"
+                    aria-label="工具集合"
+                    :style="toolsMenuStyle"
+                    @mouseenter="openToolsMenu"
+                    @mouseleave="closeToolsMenu"
+                  >
+                    <!-- Keep menu open while hovering the panel itself. -->
+                    <button
+                      type="button"
+                      class="sidebar-dropdown-item"
+                      :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
+                      @click="openTool('formatCheck')"
+                    >
+                      JSON格式化校验
+                    </button>
+                    <button
+                      type="button"
+                      class="sidebar-dropdown-item"
+                      :class="{ active: activeModule === 'formatCheck' && activeTool === 'uuid' }"
+                      @click="openTool('uuid')"
+                    >
+                      UUID在线生成
+                    </button>
+                  </div>
+                </Teleport>
+              </div>
               <button
+                v-else
                 type="button"
                 class="sidebar-item"
                 :class="{ active: activeModule === tab.key }"
-                @click="openToolsDefault"
-                :ref="setToolsAnchor"
+                @click="activeModule = tab.key"
               >
                 {{ tab.label }}
               </button>
-              <!-- Menu is teleported to body so it won't be clipped by the nav's scroll/overflow. -->
-              <Teleport to="body">
-                <div
-                  v-show="toolsMenuOpen"
-                  class="sidebar-dropdown-menu"
-                  role="menu"
-                  aria-label="工具集合"
-                  :style="toolsMenuStyle"
-                  @mouseenter="openToolsMenu"
-                  @mouseleave="closeToolsMenu"
+            </template>
+          </div>
+        </aside>
+
+        <div class="module-container" :class="{ 'single-view': activeModule !== 'all' }">
+        <template v-for="module in listModules" :key="module.key">
+          <div v-if="showModule(module.key)" class="list-card">
+            <h2 class="module-title">{{ module.title }}</h2>
+            <div v-if="module.key === 'vpn' && activeModule === 'vpn'" class="inline-md">
+              <h3 v-if="latestVpnTitle" class="inline-md-title">{{ latestVpnTitle }}</h3>
+              <div class="inline-md-content" v-html="latestVpnHtml" />
+            </div>
+            <template v-else>
+              <div class="list-item" v-for="item in module.items" :key="item.key">
+                <a
+                  :href="item.href"
+                  class="date-link"
+                  @click.prevent="openModuleItem(module.key, item.value)"
                 >
-                  <!-- Keep menu open while hovering the panel itself. -->
-                  <button
-                    type="button"
-                    class="sidebar-dropdown-item"
-                    :class="{ active: activeModule === 'formatCheck' && activeTool === 'formatCheck' }"
-                    @click="openTool('formatCheck')"
-                  >
-                    JSON格式化校验
-                  </button>
-                  <button
-                    type="button"
-                    class="sidebar-dropdown-item"
-                    :class="{ active: activeModule === 'formatCheck' && activeTool === 'uuid' }"
-                    @click="openTool('uuid')"
-                  >
-                    UUID在线生成
-                  </button>
-                </div>
-              </Teleport>
-            </div>
-            <button
-              v-else
-              type="button"
-              class="sidebar-item"
-              :class="{ active: activeModule === tab.key }"
-              @click="activeModule = tab.key"
+                  {{ item.label }}
+                </a>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- 翻译模块 -->
+        <div v-if="showModule('translate')" class="list-card translate-card">
+          <h2 class="module-title">翻译</h2>
+          <p class="translate-hint">自动识别左侧为中文或英文，点击翻译后在右侧显示另一种语言</p>
+          <div class="translate-toolbar">
+            <p
+              class="translate-detect"
+              :class="{ warn: translateDetectWarn }"
+              role="status"
+              aria-live="polite"
             >
-              {{ tab.label }}
+              {{ translateDetectMessage }}
+            </p>
+            <button
+              type="button"
+              class="translate-submit"
+              :disabled="translateLoading || !canTranslate"
+              @click="runTranslate"
+            >
+              {{ translateLoading ? '翻译中…' : '翻译' }}
             </button>
-          </template>
-        </div>
-      </aside>
-
-      <div class="module-container" :class="{ 'single-view': activeModule !== 'all' }">
-      <template v-for="module in listModules" :key="module.key">
-        <div v-if="showModule(module.key)" class="list-card">
-          <h2 class="module-title">{{ module.title }}</h2>
-          <div v-if="module.key === 'vpn' && activeModule === 'vpn'" class="inline-md">
-            <h3 v-if="latestVpnTitle" class="inline-md-title">{{ latestVpnTitle }}</h3>
-            <div class="inline-md-content" v-html="latestVpnHtml" />
           </div>
-          <template v-else>
-            <div class="list-item" v-for="item in module.items" :key="item.key">
-              <a
-                :href="item.href"
-                class="date-link"
-                @click.prevent="openModuleItem(module.key, item.value)"
-              >
-                {{ item.label }}
-              </a>
+          <div class="translate-panels">
+            <div class="translate-panel">
+              <label class="panel-label" for="translate-input">原文</label>
+              <textarea
+                id="translate-input"
+                v-model="translateSource"
+                class="translate-textarea"
+                placeholder="在此输入要翻译的内容…"
+                rows="10"
+                spellcheck="false"
+              />
             </div>
-          </template>
-        </div>
-      </template>
-
-      <!-- 翻译模块 -->
-      <div v-if="showModule('translate')" class="list-card translate-card">
-        <h2 class="module-title">翻译</h2>
-        <p class="translate-hint">自动识别左侧为中文或英文，点击翻译后在右侧显示另一种语言</p>
-        <div class="translate-toolbar">
-          <p
-            class="translate-detect"
-            :class="{ warn: translateDetectWarn }"
-            role="status"
-            aria-live="polite"
-          >
-            {{ translateDetectMessage }}
-          </p>
-          <button
-            type="button"
-            class="translate-submit"
-            :disabled="translateLoading || !canTranslate"
-            @click="runTranslate"
-          >
-            {{ translateLoading ? '翻译中…' : '翻译' }}
-          </button>
-        </div>
-        <div class="translate-panels">
-          <div class="translate-panel">
-            <label class="panel-label" for="translate-input">原文</label>
-            <textarea
-              id="translate-input"
-              v-model="translateSource"
-              class="translate-textarea"
-              placeholder="在此输入要翻译的内容…"
-              rows="10"
-              spellcheck="false"
-            />
+            <div class="translate-divider" aria-hidden="true" />
+            <div class="translate-panel">
+              <label class="panel-label" for="translate-output">译文</label>
+              <textarea
+                id="translate-output"
+                :value="translateResult"
+                class="translate-textarea translate-output"
+                readonly
+                placeholder="翻译结果将显示在这里"
+                rows="10"
+                spellcheck="false"
+              />
+            </div>
           </div>
-          <div class="translate-divider" aria-hidden="true" />
-          <div class="translate-panel">
-            <label class="panel-label" for="translate-output">译文</label>
-            <textarea
-              id="translate-output"
-              :value="translateResult"
-              class="translate-textarea translate-output"
-              readonly
-              placeholder="翻译结果将显示在这里"
-              rows="10"
-              spellcheck="false"
-            />
-          </div>
+          <p v-if="translateError" class="translate-error">{{ translateError }}</p>
         </div>
-        <p v-if="translateError" class="translate-error">{{ translateError }}</p>
-      </div>
 
-      <!-- 格式化校验模块 -->
-      <div v-if="showModule('formatCheck')" class="list-card format-check-card">
-        <h2 class="module-title">{{ toolsTitle }}</h2>
-        <JsonFormatValidator v-if="activeTool === 'formatCheck'" />
-        <UuidGenerator v-else />
+        <!-- 工具集合模块 -->
+        <div v-if="showModule('formatCheck')" class="list-card format-check-card">
+          <h2 class="module-title">{{ toolsTitle }}</h2>
+          <JsonFormatValidator v-if="activeTool === 'formatCheck'" />
+          <UuidGenerator v-else />
+        </div>
+        </div>
       </div>
+    </main>
+
+    <footer class="page-footer">
+      <div class="page-footer-inner">
+        <p class="page-subtitle">作者：JsonCC · 每天都有新内容</p>
       </div>
-    </div>
+    </footer>
 
     <!-- 点击后，渲染对应 md 内容 -->
     <MarkdownViewer v-if="showViewer" :mdContent="currentMdContent" @close="closeViewer" />
@@ -266,6 +282,8 @@ const activeTool = ref('formatCheck') // formatCheck | uuid
 const toolsMenuOpen = ref(false)
 const toolsMenuTimer = ref(0)
 const toolsAnchorRef = ref(null)
+const nowText = ref('')
+let clockTimer = 0
 const toolsMenuStyle = ref({
   position: 'fixed',
   left: '-9999px',
@@ -357,13 +375,32 @@ const onWindowRelayout = () => {
   updateToolsMenuPosition()
 }
 
+const formatNow = () => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  const w = weekdays[now.getDay()]
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  const ss = String(now.getSeconds()).padStart(2, '0')
+  return `${y}-${m}-${d} ${w} ${hh}:${mm}:${ss}`
+}
+
 onMounted(() => {
+  nowText.value = formatNow()
+  clockTimer = window.setInterval(() => {
+    nowText.value = formatNow()
+  }, 1000)
+
   // Re-position the menu when the page/layout scrolls or resizes.
   window.addEventListener('scroll', onWindowRelayout, true)
   window.addEventListener('resize', onWindowRelayout)
 })
 
 onBeforeUnmount(() => {
+  if (clockTimer) window.clearInterval(clockTimer)
   window.removeEventListener('scroll', onWindowRelayout, true)
   window.removeEventListener('resize', onWindowRelayout)
 })
