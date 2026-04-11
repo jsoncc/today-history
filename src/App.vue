@@ -179,6 +179,7 @@
           ，
           <a href="mailto:896415482@qq.com">896415482@qq.com</a>
         </p>
+        <p class="footer-stats" role="status">{{ footerStatsText }}</p>
       </div>
     </footer>
 
@@ -437,6 +438,56 @@ const formatNow = () => {
   return `${y}-${m}-${d} ${w} ${hh}:${mm}:${ss}`
 }
 
+/** 页脚全站 PV/UV：请求 Cloudflare Worker GET /stats（与翻译可共用同一 Worker） */
+const footerStatsText = ref('全站访问统计加载中…')
+
+const buildStatsEndpoint = (): string | null => {
+  const custom = import.meta.env.VITE_SITE_STATS_URL?.trim()
+  if (custom) {
+    const c = custom.replace(/\/$/, '')
+    return c.endsWith('/stats') ? c : `${c}/stats`
+  }
+  const base = import.meta.env.VITE_BAIDU_TRANSLATE_URL?.trim()
+  if (base) return `${base.replace(/\/$/, '')}/stats`
+  if (import.meta.env.DEV) return '/site-stats'
+  return null
+}
+
+const loadSiteStats = async () => {
+  const url = buildStatsEndpoint()
+  if (!url) {
+    footerStatsText.value =
+      '全站统计未配置：生产环境请在 Secrets 填写 VITE_BAIDU_TRANSLATE_URL；统计为同 Worker 的 /stats（需 KV）'
+    return
+  }
+  type StatsPayload = {
+    totalPv?: number
+    totalUv?: number
+    configured?: boolean
+    message?: string
+    error?: string
+  }
+  try {
+    const res = await fetch(url, { credentials: 'include' })
+    const data = (await res.json()) as StatsPayload
+    if (data.error === 'origin_not_allowed') {
+      footerStatsText.value = '统计接口未放行当前站点域名（Worker 变量 STATS_ORIGINS 或代码白名单）'
+      return
+    }
+    if (data.configured === false) {
+      footerStatsText.value =
+        data.message || '统计未启用：Worker 请绑定 KV（命名空间 binding 为 SITE_STATS，见 workers/README.md）'
+      return
+    }
+    const pv = Number(data.totalPv ?? 0)
+    const uv = Number(data.totalUv ?? 0)
+    footerStatsText.value = `总访问量 ${pv.toLocaleString('zh-CN')} · 总访客 ${uv.toLocaleString('zh-CN')}`
+  } catch {
+    footerStatsText.value =
+      '全站统计暂时无法加载（检查 Worker、KV；本地需另开终端 wrangler dev 且 Vite 代理 /site-stats）'
+  }
+}
+
 onMounted(() => {
   nowText.value = formatNow()
   clockTimer = window.setInterval(() => {
@@ -445,6 +496,8 @@ onMounted(() => {
 
   window.addEventListener('scroll', onWindowRelayout, true)
   window.addEventListener('resize', onWindowRelayout)
+
+  void loadSiteStats()
 })
 
 onBeforeUnmount(() => {

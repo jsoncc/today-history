@@ -39,6 +39,7 @@ jobs:
           VITE_BAIDU_APP_ID: ${{ secrets.VITE_BAIDU_APP_ID }}
           VITE_BAIDU_SECRET: ${{ secrets.VITE_BAIDU_SECRET }}
           VITE_BAIDU_TRANSLATE_URL: ${{ secrets.VITE_BAIDU_TRANSLATE_URL }}
+          VITE_SITE_STATS_URL: ${{ secrets.VITE_SITE_STATS_URL }}
         run: npm run build
 
       - name: Setup Pages

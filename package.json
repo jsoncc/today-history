@@ -9,7 +9,10 @@
     "prebuild": "tsx scripts/generate-blog-meta.ts",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "workers:dev": "wrangler dev --config workers/wrangler.toml",
+    "workers:deploy": "wrangler deploy --config workers/wrangler.toml",
+    "workers:kv-bind": "node scripts/worker-kv-bind.mjs"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",
@@ -23,6 +26,7 @@
     "tsx": "^4.19.2",
     "typescript": "~5.7.2",
     "vite": "^5.0.0",
-    "vue-tsc": "^2.1.10"
+    "vue-tsc": "^2.1.10",
+    "wrangler": "^3.114.1"
   }
 }

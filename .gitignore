@@ -9,11 +9,29 @@ lerna-debug.log*
 
 node_modules
 .env
+.env.*
+!.env.example
 /dist
 dist
 dist-ssr
 *.local
 # package-lock.json
+
+# Wrangler / Cloudflare：本地 KV 状态、缓存等（勿提交）
+**/.wrangler/
+workers/.dev.vars
+.dev.vars
+
+# 构建与类型检查缓存
+*.tsbuildinfo
+.eslintcache
+coverage
+*.pem
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Editor directories and files
 .vscode/*

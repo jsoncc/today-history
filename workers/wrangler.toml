@@ -1,3 +1,11 @@
 name = "today-history-baidu-proxy"
-main = "baidu-proxy.ts"
+main = "site-worker.ts"
 compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "SITE_STATS"
+id = "d735cb979eff44c58d4179dfd1acbc86"
+
+# 可选：逗号分隔的额外 CORS 来源（默认已含 jsoncc.github.io 与 localhost:3000）
+# [vars]
+# STATS_ORIGINS = "https://你的自定义域名.com"
