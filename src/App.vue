@@ -171,14 +171,23 @@
 
     <footer class="page-footer">
       <div class="page-footer-inner">
-        <p class="footer-brand">JsonCC Lab</p>
-        <p class="page-subtitle">作者：JsonCC · 每天都有新内容</p>
-        <p class="footer-emails">
-          邮箱：
-          <a href="mailto:13233768245@163.com">13233768245@163.com</a>
-          ，
-          <a href="mailto:896415482@qq.com">896415482@qq.com</a>
-        </p>
+        <div class="footer-head">
+          <p class="footer-brand">JsonCC Lab</p>
+          <p class="footer-tagline">
+            <span class="footer-tagline-line">作者：JsonCC</span>
+            <span class="footer-tagline-sep" aria-hidden="true">·</span>
+            <span class="footer-tagline-line">每天都有新内容</span>
+          </p>
+        </div>
+
+        <div class="footer-contact" aria-label="联系邮箱">
+          <span class="footer-contact-label">邮箱</span>
+          <div class="footer-mail-list">
+            <a class="footer-mail" href="mailto:13233768245@163.com">13233768245@163.com</a>
+            <a class="footer-mail" href="mailto:896415482@qq.com">896415482@qq.com</a>
+          </div>
+        </div>
+
         <p class="footer-stats" role="status">{{ footerStatsText }}</p>
       </div>
     </footer>
