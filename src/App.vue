@@ -196,6 +196,43 @@
       </div>
     </footer>
 
+    <div class="floating-tools">
+      <button
+        type="button"
+        class="floating-tool-btn favorite-btn"
+        title="收藏本站"
+        aria-label="收藏本站"
+        @click="addToBookmarks"
+      >
+        <Icon class="favorite-icon" :icon="starOutlineIcon" aria-hidden="true" />
+      </button>
+
+      <div class="qrcode-tool">
+        <button
+          type="button"
+          class="floating-tool-btn qrcode-btn"
+          title="更多精彩"
+          aria-label="更多精彩"
+        >
+          <Icon class="qrcode-icon" :icon="qrcodeIcon" aria-hidden="true" />
+        </button>
+        <div class="qrcode-popover" aria-hidden="true">
+          <img class="qrcode-image" :src="homeQrcodeImg" alt="JsonCC Lab 二维码" />
+        </div>
+      </div>
+
+      <button
+        v-show="showBackToTop"
+        type="button"
+        class="floating-tool-btn back-to-top"
+        title="顶一下"
+        aria-label="顶一下"
+        @click="scrollToTop"
+      >
+        <Icon class="back-to-top-icon" :icon="pinTopIcon" aria-hidden="true" />
+      </button>
+    </div>
+
     <!-- 点击后，渲染对应 md 内容 -->
     <MarkdownViewer v-if="showViewer" :mdContent="currentMdContent" @close="closeViewer" />
   </div>
@@ -215,12 +252,17 @@ import {
   type CSSProperties,
   type VNodeRef
 } from 'vue'
+import { Icon } from '@iconify/vue'
+import pinTopIcon from '@iconify-icons/radix-icons/pin-top'
+import qrcodeIcon from '@iconify-icons/mdi/qrcode'
+import starOutlineIcon from '@iconify-icons/mdi/star-outline'
 import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
 import JsonFormatValidator from './components/JsonFormatValidator.vue'
 import UuidGenerator from './components/UuidGenerator.vue'
 import blogMeta from './assets/blog/blog-meta.json'
+import homeQrcodeImg from './assets/images/home/qrcode.png'
 
 /** Vite ?raw 导入在 eager glob 里可能是 string 或 { default: string } */
 type GlobRawModule = string | { default: string }
@@ -432,6 +474,47 @@ const onWindowRelayout = () => {
   updateToolsMenuPosition()
 }
 
+const showBackToTop = ref(false)
+
+const updateBackToTopVisibility = () => {
+  const top = window.scrollY || document.documentElement.scrollTop || 0
+  showBackToTop.value = top >= window.innerHeight * 0.9
+}
+
+const onWindowScroll = () => {
+  onWindowRelayout()
+  updateBackToTopVisibility()
+}
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const addToBookmarks = () => {
+  const title = document.title || 'JsonCC Lab'
+  const url = window.location.href
+  const navWindow = window as Window & {
+    external?: { addFavorite?: (bookmarkUrl: string, bookmarkTitle: string) => void }
+    sidebar?: { addPanel?: (panelTitle: string, panelUrl: string, panelId: string) => void }
+  }
+
+  try {
+    if (typeof navWindow.external?.addFavorite === 'function') {
+      navWindow.external.addFavorite(url, title)
+      return
+    }
+    if (typeof navWindow.sidebar?.addPanel === 'function') {
+      navWindow.sidebar.addPanel(title, url, '')
+      return
+    }
+  } catch {
+    // Ignore and fallback to shortcut hint.
+  }
+
+  const shortcut = /Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? 'Command + D' : 'Ctrl + D'
+  window.alert(`请按 ${shortcut} 将本站加入书签`)
+}
+
 // —— 页头实时时钟 ——
 const formatNow = () => {
   const now = new Date()
@@ -503,15 +586,16 @@ onMounted(() => {
     nowText.value = formatNow()
   }, 1000) as number
 
-  window.addEventListener('scroll', onWindowRelayout, true)
+  window.addEventListener('scroll', onWindowScroll, true)
   window.addEventListener('resize', onWindowRelayout)
+  updateBackToTopVisibility()
 
   void loadSiteStats()
 })
 
 onBeforeUnmount(() => {
   if (clockTimer) window.clearInterval(clockTimer)
-  window.removeEventListener('scroll', onWindowRelayout, true)
+  window.removeEventListener('scroll', onWindowScroll, true)
   window.removeEventListener('resize', onWindowRelayout)
 })
 
