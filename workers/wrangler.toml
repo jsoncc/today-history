@@ -1,4 +1,4 @@
-name = "today-history-baidu-proxy"
+name = "jcclab-baidu-proxy"
 main = "site-worker.ts"
 compatibility_date = "2024-01-01"
 

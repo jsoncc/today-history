@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
 const workersDir = path.join(root, 'workers')
 const tomlPath = path.join(workersDir, 'wrangler.toml')
+const WORKER_NAME = 'jcclab-baidu-proxy'
 
 interface WranglerKvNamespaceRow {
   title?: string
@@ -48,7 +49,7 @@ function fetchExistingSiteStatsId(): string | null {
         x !== null &&
         'title' in x &&
         typeof (x as WranglerKvNamespaceRow).title === 'string' &&
-        ((x as WranglerKvNamespaceRow).title === 'today-history-baidu-proxy-SITE_STATS' ||
+        ((x as WranglerKvNamespaceRow).title === `${WORKER_NAME}-SITE_STATS` ||
           String((x as WranglerKvNamespaceRow).title).includes('SITE_STATS'))
     )
     return row?.id && typeof row.id === 'string' ? row.id : null
@@ -82,7 +83,7 @@ function hasBoundKv(toml: string): boolean {
 
 function writeTomlWithKv(prodId: string, previewId: string | null): void {
   const previewLine = previewId ? `preview_id = "${previewId}"\n` : ''
-  const content = `name = "today-history-baidu-proxy"
+  const content = `name = "${WORKER_NAME}"
 main = "site-worker.ts"
 compatibility_date = "2024-01-01"
 
