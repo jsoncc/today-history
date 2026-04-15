@@ -1,32 +1,67 @@
 <template>
   <div class="b64">
-    <p class="b64-hint">请输入要进行 Base64 解码的字符串（支持普通/Base64URL/MIME 形式）。</p>
+    <div class="b64-mode-switch" role="tablist" aria-label="Base64操作模式">
+      <button
+        type="button"
+        class="b64-mode-btn"
+        :class="{ active: mode === 'decode' }"
+        role="tab"
+        :aria-selected="mode === 'decode'"
+        @click="switchMode('decode')"
+      >
+        解码模式
+      </button>
+      <button
+        type="button"
+        class="b64-mode-btn"
+        :class="{ active: mode === 'encode' }"
+        role="tab"
+        :aria-selected="mode === 'encode'"
+        @click="switchMode('encode')"
+      >
+        编码模式
+      </button>
+    </div>
+
+    <p class="b64-hint">{{ modeHint }}</p>
 
     <textarea
       v-model="inputText"
       class="b64-input"
       spellcheck="false"
-      placeholder="在此输入 Base64 字符串…"
+      :placeholder="mode === 'decode' ? '在此输入 Base64 字符串…' : '在此输入要编码的原文…'"
       rows="7"
     />
 
     <div class="b64-actions">
-      <button type="button" class="b64-btn primary" :disabled="!canDecode" @click="decodeBase64">Base64解码</button>
+      <button
+        type="button"
+        class="b64-btn primary"
+        :disabled="!canRun"
+        @click="mode === 'decode' ? decodeBase64() : encodeBase64()"
+      >
+        {{ mode === 'decode' ? 'Base64解码' : 'Base64编码' }}
+      </button>
       <button type="button" class="b64-btn" :disabled="!outputText" @click="copyResult">复制结果</button>
+      <button type="button" class="b64-btn" :disabled="!outputText" @click="swapInputOutput">交换输入/输出</button>
       <button type="button" class="b64-btn" :disabled="!inputText && !outputText" @click="clearAll">清空</button>
-      <button type="button" class="b64-link-btn" @click="fillExample('plain')">查看示例</button>
-      <button type="button" class="b64-link-btn" @click="fillExample('mime')">MIME解码示例</button>
+      <button type="button" class="b64-link-btn" @click="fillExample(mode === 'decode' ? 'plain' : 'encode')">
+        查看示例
+      </button>
+      <button v-if="mode === 'decode'" type="button" class="b64-link-btn" @click="fillExample('mime')">
+        MIME解码示例
+      </button>
     </div>
 
     <p class="b64-status" :class="{ ok: statusKind === 'ok', error: statusKind === 'error' }">{{ statusText }}</p>
 
-    <p class="b64-label">Base64解码的结果：</p>
+    <p class="b64-label">{{ mode === 'decode' ? 'Base64解码的结果：' : 'Base64编码的结果：' }}</p>
     <textarea
       :value="outputText"
       class="b64-output"
       readonly
       spellcheck="false"
-      placeholder="解码结果将显示在这里"
+      :placeholder="mode === 'decode' ? '解码结果将显示在这里' : '编码结果将显示在这里'"
       rows="8"
     />
   </div>
@@ -36,14 +71,21 @@
 import { computed, ref } from 'vue'
 
 type StatusKind = 'idle' | 'ok' | 'error'
-type ExampleKind = 'plain' | 'mime'
+type ExampleKind = 'plain' | 'mime' | 'encode'
+type Mode = 'decode' | 'encode'
 
 const inputText = ref('')
 const outputText = ref('')
+const mode = ref<Mode>('decode')
 const statusKind = ref<StatusKind>('idle')
 const statusText = ref('等待解码')
 
-const canDecode = computed(() => Boolean(inputText.value.trim()))
+const canRun = computed(() => Boolean(inputText.value.trim()))
+const modeHint = computed(() =>
+  mode.value === 'decode'
+    ? '请输入要进行 Base64 解码的字符串（支持普通/Base64URL/MIME 形式）。'
+    : '请输入要进行 Base64 编码的原始文本（按 UTF-8 编码）。'
+)
 
 const normalizeBase64 = (raw: string) => {
   let text = String(raw || '').trim()
@@ -61,6 +103,12 @@ const decodeUtf8FromBase64 = (raw: string) => {
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
 }
 
+const looksLikeBase64 = (text: string) => {
+  const t = String(text || '').trim().replace(/\s+/g, '')
+  if (!t) return false
+  return /^[A-Za-z0-9+/_=-]+$/.test(t)
+}
+
 const decodeBase64 = () => {
   try {
     outputText.value = decodeUtf8FromBase64(inputText.value)
@@ -70,6 +118,23 @@ const decodeBase64 = () => {
     outputText.value = ''
     statusKind.value = 'error'
     statusText.value = '解码失败：请输入有效的 Base64 内容'
+  }
+}
+
+const encodeBase64 = () => {
+  try {
+    const bytes = new TextEncoder().encode(inputText.value)
+    let binary = ''
+    bytes.forEach((b) => {
+      binary += String.fromCharCode(b)
+    })
+    outputText.value = window.btoa(binary)
+    statusKind.value = 'ok'
+    statusText.value = '编码成功'
+  } catch {
+    outputText.value = ''
+    statusKind.value = 'error'
+    statusText.value = '编码失败：请检查输入内容'
   }
 }
 
@@ -110,16 +175,44 @@ const fillExample = (kind: ExampleKind) => {
   inputText.value =
     kind === 'plain'
       ? '5L2g5aW977yM6L+Z5pivIEpzb25DQyBMYWIg55qEIEJhc2U2NOino+eggeekuuS+i+OAgg=='
-      : 'U3ViamVjdDog5Lit5paH5L2g5aW9DQoNCk1JTUUgQmFzZTY0IOekuuS+i+Wtl+espuS4suOAgg=='
+      : kind === 'mime'
+        ? 'U3ViamVjdDog5Lit5paH5L2g5aW9DQoNCk1JTUUgQmFzZTY0IOekuuS+i+Wtl+espuS4suOAgg=='
+        : 'JsonCC Lab Base64 编码示例'
   statusKind.value = 'idle'
-  statusText.value = '示例已填充，点击“Base64解码”查看结果'
+  statusText.value =
+    mode.value === 'decode'
+      ? '示例已填充，点击“Base64解码”查看结果'
+      : '示例已填充，点击“Base64编码”查看结果'
+}
+
+const switchMode = (nextMode: Mode) => {
+  mode.value = nextMode
+  inputText.value = ''
+  outputText.value = ''
+  statusKind.value = 'idle'
+  statusText.value = nextMode === 'decode' ? '等待解码' : '等待编码'
+}
+
+const swapInputOutput = () => {
+  const nextInput = outputText.value
+  outputText.value = inputText.value
+  inputText.value = nextInput
+  if (looksLikeBase64(inputText.value)) {
+    mode.value = 'decode'
+    statusKind.value = 'idle'
+    statusText.value = '已交换，当前更适合解码模式'
+  } else {
+    mode.value = 'encode'
+    statusKind.value = 'idle'
+    statusText.value = '已交换，当前更适合编码模式'
+  }
 }
 
 const clearAll = () => {
   inputText.value = ''
   outputText.value = ''
   statusKind.value = 'idle'
-  statusText.value = '等待解码'
+  statusText.value = mode.value === 'decode' ? '等待解码' : '等待编码'
 }
 </script>
 
@@ -128,6 +221,32 @@ const clearAll = () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.b64-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 3px;
+  width: fit-content;
+}
+
+.b64-mode-btn {
+  border: none;
+  background: transparent;
+  color: #475569;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.b64-mode-btn.active {
+  background: #1e9fff;
+  color: #fff;
 }
 
 .b64-hint,

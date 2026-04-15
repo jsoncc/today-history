@@ -108,7 +108,7 @@
                       :class="{ active: activeModule === 'formatCheck' && activeTool === 'base64Decode' }"
                       @click="openTool('base64Decode')"
                     >
-                      在线Base64解码
+                      在线Base64编解码
                     </button>
                   </div>
                 </Teleport>
@@ -460,7 +460,7 @@ const openTool = (toolKey: ActiveToolKey) => {
 const toolsTitle = computed(() => {
   if (activeTool.value === 'uuid') return 'UUID在线生成'
   if (activeTool.value === 'mybatisSql') return 'MyBatis SQL日志格式化'
-  if (activeTool.value === 'base64Decode') return '在线Base64解码工具'
+  if (activeTool.value === 'base64Decode') return '在线Base64编解码工具'
   return 'JSON格式化校验'
 })
 
@@ -768,9 +768,9 @@ const headerSearchCandidates = computed<HeaderSearchItem[]>(() => [
   },
   {
     key: 'tool-base64',
-    title: '工具：在线Base64解码工具',
+    title: '工具：在线Base64编解码工具',
     meta: '工具集合',
-    tags: ['base64', '解码', 'base64解码', '在线base64解码工具', '工具'],
+    tags: ['base64', '解码', '编码', 'base64解码', 'base64编码', '在线base64编解码工具', '工具'],
     action: () => toTool('base64Decode')
   },
   ...dateList.value.slice(0, 30).map((item) => ({
