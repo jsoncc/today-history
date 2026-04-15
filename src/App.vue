@@ -591,15 +591,26 @@ const formatNow = () => {
 /** 页脚全站 PV/UV：请求 Cloudflare Worker GET /stats（与翻译可共用同一 Worker） */
 const footerStatsText = ref('全站访问统计加载中…')
 
+/**
+ * 生产环境常见误填：漏写协议（如 xxx.workers.dev）或带尾斜杠。
+ * 这里做一次归一化，降低 Secrets 配置错误导致的 Failed to fetch。
+ */
+const normalizeHttpUrl = (raw: string | undefined | null) => {
+  const s = String(raw || '').trim()
+  if (!s) return ''
+  const withProtocol =
+    /^https?:\/\//i.test(s) ? s : s.startsWith('//') ? `https:${s}` : `https://${s}`
+  return withProtocol.replace(/\/+$/, '')
+}
+
 /** 统计 URL 优先级：VITE_SITE_STATS_URL → VITE_BAIDU_TRANSLATE_URL + /stats → 开发环境 /site-stats（Vite 代理） */
 const buildStatsEndpoint = (): string | null => {
-  const custom = import.meta.env.VITE_SITE_STATS_URL?.trim()
+  const custom = normalizeHttpUrl(import.meta.env.VITE_SITE_STATS_URL)
   if (custom) {
-    const c = custom.replace(/\/$/, '')
-    return c.endsWith('/stats') ? c : `${c}/stats`
+    return custom.endsWith('/stats') ? custom : `${custom}/stats`
   }
-  const base = import.meta.env.VITE_BAIDU_TRANSLATE_URL?.trim()
-  if (base) return `${base.replace(/\/$/, '')}/stats`
+  const base = normalizeHttpUrl(import.meta.env.VITE_BAIDU_TRANSLATE_URL)
+  if (base) return base.endsWith('/stats') ? base : `${base}/stats`
   if (import.meta.env.DEV) return '/site-stats'
   return null
 }
@@ -871,7 +882,7 @@ const translateError = ref('')
 
 const baiduAppId = import.meta.env.VITE_BAIDU_APP_ID
 const baiduSecret = import.meta.env.VITE_BAIDU_SECRET
-const baiduTranslateUrlEnv = String(import.meta.env.VITE_BAIDU_TRANSLATE_URL || '').trim()
+const baiduTranslateUrlEnv = normalizeHttpUrl(import.meta.env.VITE_BAIDU_TRANSLATE_URL)
 
 const baiduTranslateConfigured = computed(
   () => Boolean(String(baiduAppId || '').trim() && String(baiduSecret || '').trim())
