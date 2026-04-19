@@ -6,6 +6,10 @@ import { Solar } from 'lunar-javascript'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.join(__dirname, '..')
 const historyDir = path.join(rootDir, 'src', 'assets', 'history')
+
+/** 全文收尾句；若被 parseSections 吃进「程序员视角」区块，会与 buildMarkdown 末尾再追加的一次重复，需在抽取章节时剥掉。 */
+const HISTORY_CLOSING_LINE = '✨ 历史不会重复，但总会惊人地相似 ✨'
+
 const SECTION_ORDER = [
   '🏛️ 古代印记',
   '🌍 近现代·国际',
@@ -136,11 +140,11 @@ function normalizeSectionKey(value: string): string {
   return value.normalize('NFC').replace(/\s+/g, ' ').trim()
 }
 
-function trimTrailingSeparators(text: string): string {
+function trimSectionTrailingNoise(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
   while (lines.length > 0) {
     const last = lines[lines.length - 1]?.trim() ?? ''
-    if (last === '' || last === '---') {
+    if (last === '' || last === '---' || last === HISTORY_CLOSING_LINE) {
       lines.pop()
       continue
     }
@@ -157,10 +161,10 @@ function pickSectionContent(files: string[], sectionName: string, excludeFileNam
     const content = fs.readFileSync(filePath, 'utf8')
     const sections = parseSections(content)
     const direct = sections[sectionName]
-    if (direct) return trimTrailingSeparators(direct)
+    if (direct) return trimSectionTrailingNoise(direct)
 
     const matchedKey = Object.keys(sections).find((key) => normalizeSectionKey(key) === wanted)
-    if (matchedKey && sections[matchedKey]) return trimTrailingSeparators(sections[matchedKey])
+    if (matchedKey && sections[matchedKey]) return trimSectionTrailingNoise(sections[matchedKey])
   }
   return '- 暂无可用历史条目，后续将持续补充。'
 }
@@ -198,7 +202,10 @@ function buildMarkdown(targetDate: string, files: string[], excludeFileName?: st
     '',
     festivalBlock,
     sections,
-    '✨ 历史不会重复，但总会惊人地相似 ✨'
+    '',
+    '---',
+    '',
+    HISTORY_CLOSING_LINE
   ]
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
