@@ -409,36 +409,24 @@
   text-align: center;
 }
 
+.header-time-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.header-time-btn:hover {
+  color: #0969da;
+}
+
 .header-time-icon {
   width: 16px;
   height: 16px;
-  border-radius: 999px;
-  background: #4a90e5;
-  display: inline-block;
-  position: relative;
-}
-
-.header-time-icon::before,
-.header-time-icon::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  background: #fff;
-  transform-origin: left top;
-  border-radius: 1px;
-}
-
-.header-time-icon::before {
-  width: 1px;
-  height: 5px;
-  transform: translate(-50%, -95%) rotate(0deg);
-}
-
-.header-time-icon::after {
-  width: 4px;
-  height: 1px;
-  transform: translate(-5%, -50%) rotate(0deg);
+  color: #4a90e5;
+  display: block;
 }
 
 @media (max-width: 720px) {

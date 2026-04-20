@@ -16,8 +16,10 @@
         </p>
       </div>
       <p class="header-time">
-        <span class="header-time-icon" aria-hidden="true" />
-        {{ nowText }}
+        <Icon class="header-time-icon" :icon="calendarClockOutlineIcon" aria-hidden="true" />
+        <button type="button" class="header-time-btn" @click="showPerpetualCalendar = true">
+          {{ nowText }}
+        </button>
       </p>
       <div class="header-right">
         <div class="header-search">
@@ -283,6 +285,8 @@
       </button>
     </div>
 
+    <PerpetualCalendar v-if="showPerpetualCalendar" @close="showPerpetualCalendar = false" />
+
     <!-- 点击后，渲染对应 md 内容 -->
     <MarkdownViewer v-if="showViewer" :mdContent="currentMdContent" @close="closeViewer" />
   </div>
@@ -306,6 +310,7 @@ import { Icon } from '@iconify/vue'
 import pinTopIcon from '@iconify-icons/radix-icons/pin-top'
 import qrcodeIcon from '@iconify-icons/mdi/qrcode'
 import starOutlineIcon from '@iconify-icons/mdi/star-outline'
+import calendarClockOutlineIcon from '@iconify-icons/mdi/calendar-clock-outline'
 import CryptoJS from 'crypto-js'
 import { marked } from 'marked'
 import MarkdownViewer from './components/MarkdownViewer.vue'
@@ -314,6 +319,7 @@ import UuidGenerator from './components/UuidGenerator.vue'
 import MyBatisSqlFormatter from './components/MyBatisSqlFormatter.vue'
 import Base64Decoder from './components/Base64Decoder.vue'
 import Base64ToFileTool from './components/Base64ToFileTool.vue'
+import PerpetualCalendar from './components/PerpetualCalendar.vue'
 import blogMeta from './assets/blog/blog-meta.json'
 import homeQrcodeImg from './assets/images/home/qrcode.png'
 
@@ -534,6 +540,7 @@ const onWindowRelayout = () => {
 }
 
 const showBackToTop = ref(false)
+const showPerpetualCalendar = ref(false)
 
 const updateBackToTopVisibility = () => {
   const top = window.scrollY || document.documentElement.scrollTop || 0

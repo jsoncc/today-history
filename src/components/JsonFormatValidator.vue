@@ -37,9 +37,9 @@
       aria-live="polite"
     >
       <span class="jfv-result-icon" aria-hidden="true">
-        <span v-if="statusKind === 'ok'">✓</span>
-        <span v-else-if="statusKind === 'error'">✕</span>
-        <span v-else>i</span>
+        <Icon v-if="statusKind === 'ok'" :icon="checkBold" />
+        <Icon v-else-if="statusKind === 'error'" :icon="closeThick" />
+        <Icon v-else :icon="informationVariant" />
       </span>
       <div class="jfv-result-text">
         <div class="jfv-result-title">{{ statusText }}</div>
@@ -56,6 +56,10 @@
  * JSON 格式化 / 校验 / 压缩：左侧行号 gutter 与 textarea 同步滚动；错误时在对应行做浅色高亮。
  */
 import { computed, nextTick, ref, type CSSProperties } from 'vue'
+import { Icon } from '@iconify/vue'
+import checkBold from '@iconify-icons/mdi/check-bold'
+import closeThick from '@iconify-icons/mdi/close-thick'
+import informationVariant from '@iconify-icons/mdi/information-variant'
 
 type StatusKind = 'idle' | 'ok' | 'error'
 
@@ -373,11 +377,14 @@ const run = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 900;
   color: #fff;
   background: #bdbdbd;
   flex: 0 0 auto;
+}
+
+.jfv-result-icon :deep(svg) {
+  width: 16px;
+  height: 16px;
 }
 
 .jfv-result.ok .jfv-result-icon {
