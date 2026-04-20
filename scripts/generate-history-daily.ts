@@ -138,6 +138,45 @@ function pickTitle(item: WikiItem): string {
   return shortText(text, 24)
 }
 
+function normalizePunctuation(text: string): string {
+  return text.replace(/：/g, ':').replace(/\s+/g, ' ').trim()
+}
+
+function parseHolidayEntry(item: WikiItem): { title: string; intro: string } {
+  const rawText = shortText(item.text ?? '', 140)
+  const titleCandidate = pickTitle(item).trim()
+  const normalized = normalizePunctuation(rawText)
+
+  // 常见结构：国家/地区: 节日名
+  const colonIdx = normalized.indexOf(':')
+  if (colonIdx > 0) {
+    const left = normalized.slice(0, colonIdx).trim()
+    const right = normalized.slice(colonIdx + 1).trim()
+    if (right) {
+      return {
+        title: right.length <= 30 ? `${right}（${left}）` : right,
+        intro: `${left}在这一天纪念该历史节点。`
+      }
+    }
+  }
+
+  const countryLike = /^[\u4e00-\u9fa5A-Za-z]{1,6}$/.test(titleCandidate)
+  if (countryLike && normalized.startsWith(`${titleCandidate}:`)) {
+    const right = normalized.slice(titleCandidate.length + 1).trim()
+    if (right) {
+      return {
+        title: `${right}（${titleCandidate}）`,
+        intro: `${titleCandidate}在这一天纪念该历史节点。`
+      }
+    }
+  }
+
+  return {
+    title: titleCandidate || '今日纪念日',
+    intro: rawText || `${titleCandidate || '该节日'}是当日纪念节点。`
+  }
+}
+
 function toBullet(item: WikiItem, fallbackYear = '佚年'): string {
   const year = Number.isFinite(item.year) ? String(item.year) : fallbackYear
   const text = item.text?.trim() || pickTitle(item)
@@ -160,6 +199,43 @@ async function fetchWikiList(kind: 'events' | 'births' | 'deaths' | 'holidays', 
   return raw.filter((item): item is WikiItem => typeof item === 'object' && item !== null)
 }
 
+async function fetchMuffinLabs(targetDate: string): Promise<OnlineSource> {
+  const [year, month, day] = targetDate.split('-').map(Number)
+  if (!year || !month || !day) throw new Error(`非法日期: ${targetDate}`)
+  const url = `https://history.muffinlabs.com/date/${month}/${day}`
+  const response = await fetch(url, {
+    headers: {
+      'user-agent': 'jcclab-history-generator/1.0'
+    }
+  })
+  if (!response.ok) {
+    throw new Error(`备用源拉取失败: HTTP ${response.status}`)
+  }
+  const data = (await response.json()) as {
+    data?: {
+      Events?: Array<{ year?: string; text?: string }>
+      Births?: Array<{ year?: string; text?: string }>
+      Deaths?: Array<{ year?: string; text?: string }>
+    }
+  }
+  const eventsRaw = data.data?.Events ?? []
+  const birthsRaw = data.data?.Births ?? []
+  const deathsRaw = data.data?.Deaths ?? []
+  const toWiki = (arr: Array<{ year?: string; text?: string }>): WikiItem[] =>
+    arr
+      .filter((item) => typeof item?.text === 'string' && item.text.trim().length > 0)
+      .map((item) => ({
+        year: Number(item.year),
+        text: item.text
+      }))
+  return {
+    events: toWiki(eventsRaw),
+    births: toWiki(birthsRaw),
+    deaths: toWiki(deathsRaw),
+    holidays: []
+  }
+}
+
 type OnlineSource = {
   events: WikiItem[]
   births: WikiItem[]
@@ -170,17 +246,51 @@ type OnlineSource = {
 async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
   const [year, month, day] = targetDate.split('-').map(Number)
   if (!year || !month || !day) throw new Error(`非法日期: ${targetDate}`)
-  const [events, births, deaths, holidays] = await Promise.all([
-    fetchWikiList('events', month, day),
-    fetchWikiList('births', month, day),
-    fetchWikiList('deaths', month, day),
-    fetchWikiList('holidays', month, day)
-  ])
-  return { events, births, deaths, holidays }
+  try {
+    const [events, births, deaths, holidays] = await Promise.all([
+      fetchWikiList('events', month, day),
+      fetchWikiList('births', month, day),
+      fetchWikiList('deaths', month, day),
+      fetchWikiList('holidays', month, day)
+    ])
+    return { events, births, deaths, holidays }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`主数据源不可用，切换备用源: ${message}`)
+    return fetchMuffinLabs(targetDate)
+  }
 }
 
 const CHINA_KEYWORDS = ['中国', '中华', '北京', '上海', '南京', '广州', '香港', '台湾', '清朝', '民国', '中华人民共和国', '中国共产党']
-const TECH_KEYWORDS = ['计算机', '互联网', '网络', '软件', '硬件', '卫星', '航天', 'AI', '人工智能', '芯片', '电信', '通信', '平台', '工程', '科学']
+const TECH_KEYWORDS = [
+  '计算机',
+  '互联网',
+  '网络',
+  '软件',
+  '硬件',
+  '卫星',
+  '航天',
+  'AI',
+  '人工智能',
+  '机器学习',
+  '芯片',
+  '电信',
+  '通信',
+  '平台',
+  '工程',
+  '科学',
+  'Java',
+  'Python',
+  'Golang',
+  'Go',
+  'Vue',
+  'React',
+  '前端',
+  '后端',
+  '数据库',
+  '云计算',
+  '微服务'
+]
 
 function containsKeyword(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => new RegExp(escapeRegExp(keyword), 'i').test(text))
@@ -220,30 +330,37 @@ function buildSectionText(items: WikiItem[], fallbackText: string, limit = 4): s
 }
 
 function buildProgrammerView(events: WikiItem[]): string {
-  const tech = pickEvents(events, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 2)
-  const global = selectUniqueByText(events, 6)
+  const top = selectUniqueByText(events, 12)
+  const tech = top.find((item) => containsKeyword(item.text ?? '', TECH_KEYWORDS))
+  const crisis = top.find((item) =>
+    containsKeyword(item.text ?? '', ['沉没', '爆炸', '袭击', '战争', '事故', '暂停运营', '危机'])
+  )
+  const recent = top.find((item) => (item.year ?? 0) >= 2000) ?? top[0]
   const lines: string[] = []
 
-  if (tech[0]) {
-    lines.push(`- ${tech[0].year ?? ''}年事件提示我们：关键系统建设要优先保证可观测性与故障恢复能力，避免“功能先行、稳定性后补”的工程失衡。`)
+  if (tech) {
+    const y = tech.year ? `${tech.year}年` : '该事件'
+    lines.push(`- ${y}相关事件对 IT 程序员（后端 Java/Python/Go）最直接的启示是：服务稳定性优先于功能堆叠。把接口契约、异常治理、熔断限流和可观测性前置，才能让系统在峰值流量与突发故障下可控。`)
   }
-  if (tech[1]) {
-    lines.push(`- 从 ${tech[1].year ?? ''} 年相关事件看，基础设施升级往往发生在风险暴露之后。对研发团队而言，更优策略是提前做压测、演练与回滚预案。`)
+  if (crisis) {
+    const y = crisis.year ? `${crisis.year}年` : '历史上的突发事件'
+    lines.push(`- 从${y}的突发案例看，信息延迟会放大损失。前端 Vue/React 与后端协同时，应保证状态一致与降级可见：统一状态页、分级告警、幂等接口和回滚开关要在设计阶段就明确。`)
   }
-  const ref = global.find((item) => (item.text ?? '').length > 0)
-  if (ref) {
-    lines.push(`- 历史条目反复说明同一件事：信息传递速度决定决策质量。工程实践里，清晰日志、可靠告警与简洁应急流程比“临场英雄主义”更关键。`)
+  if (recent) {
+    const y = recent.year ? `${recent.year}年` : '当代'
+    lines.push(`- ${y}之后的大量事件共同指向一个现实：系统边界越来越跨组织、跨地区。面向 AI 应用开发时，除了模型效果，还要同步建设数据质量、提示词治理、评测基线与安全审计，否则上线后难以长期演进。`)
   }
 
-  return lines.join('\n\n')
+  return lines.slice(0, 3).join('\n\n')
 }
 
 function buildHolidayFromOnline(holidays: WikiItem[]): string {
   const selected = selectUniqueByText(holidays, 2)
   if (selected.length === 0) return ''
   const blocks = selected.map((item) => {
-    const title = pickTitle(item)
-    const intro = shortText(item.text ?? `${title}是当日纪念节点。`, 120)
+    const parsed = parseHolidayEntry(item)
+    const title = parsed.title
+    const intro = parsed.intro
     return [title, '', intro].join('\n')
   })
   return ['## 🎈 今日节日', '', ...blocks.flatMap((block, i) => (i === 0 ? [block] : ['', block])), ''].join('\n')
