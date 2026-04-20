@@ -37,6 +37,16 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '12-25': { name: '圣诞节（Christmas）', intro: '在全球范围具有广泛影响的文化节日。' }
 }
 
+type WikiPage = {
+  titles?: { normalized?: string }
+}
+
+type WikiItem = {
+  year?: number
+  text?: string
+  pages?: WikiPage[]
+}
+
 function getShanghaiTodayIso(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
@@ -57,13 +67,6 @@ function resolveTargetDateIso(): string {
   const overrideDate = process.env.TARGET_DATE
   if (overrideDate && /^\d{4}-\d{2}-\d{2}$/.test(overrideDate)) return overrideDate
   return addDays(getShanghaiTodayIso(), 1)
-}
-
-function listHistoryFiles(): string[] {
-  return fs
-    .readdirSync(historyDir)
-    .filter((name) => /^history-\d{4}-\d{2}-\d{2}\.md$/.test(name))
-    .sort()
 }
 
 function formatChineseDate(isoDate: string): string {
@@ -107,68 +110,6 @@ function buildJieQiFestivalBody(isoDate: string): string | null {
   return [`${jieQi}（二十四节气）`, '', intro].join('\n')
 }
 
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
-}
-
-function parseSections(md: string): Record<string, string> {
-  const lines = stripBom(md).replace(/\r\n/g, '\n').split('\n')
-  const sections: Record<string, string> = {}
-  let currentTitle: string | null = null
-  let buffer: string[] = []
-
-  const flush = (): void => {
-    if (!currentTitle) return
-    sections[currentTitle.trim()] = buffer.join('\n').trim()
-  }
-
-  for (const line of lines) {
-    const match = line.trimStart().match(/^##\s+(.+)$/)
-    if (match) {
-      flush()
-      currentTitle = match[1].trim()
-      buffer = []
-      continue
-    }
-    if (currentTitle) buffer.push(line)
-  }
-  flush()
-  return sections
-}
-
-function normalizeSectionKey(value: string): string {
-  return value.normalize('NFC').replace(/\s+/g, ' ').trim()
-}
-
-function trimSectionTrailingNoise(text: string): string {
-  const lines = text.replace(/\r\n/g, '\n').split('\n')
-  while (lines.length > 0) {
-    const last = lines[lines.length - 1]?.trim() ?? ''
-    if (last === '' || last === '---' || last === HISTORY_CLOSING_LINE) {
-      lines.pop()
-      continue
-    }
-    break
-  }
-  return lines.join('\n').trimEnd()
-}
-
-function pickSectionContent(files: string[], sectionName: string, excludeFileName?: string): string {
-  const wanted = normalizeSectionKey(sectionName)
-  for (let i = files.length - 1; i >= 0; i -= 1) {
-    if (excludeFileName && files[i] === excludeFileName) continue
-    const filePath = path.join(historyDir, files[i])
-    const content = fs.readFileSync(filePath, 'utf8')
-    const sections = parseSections(content)
-    const direct = sections[sectionName]
-    if (direct) return trimSectionTrailingNoise(direct)
-
-    const matchedKey = Object.keys(sections).find((key) => normalizeSectionKey(key) === wanted)
-    if (matchedKey && sections[matchedKey]) return trimSectionTrailingNoise(sections[matchedKey])
-  }
-  return '- 暂无可用历史条目，后续将持续补充。'
-}
-
 function buildFestivalSection(targetDate: string): string {
   const fixedBody = buildFixedFestivalBody(targetDate)
   const jieQiBody = buildJieQiFestivalBody(targetDate)
@@ -179,17 +120,162 @@ function buildFestivalSection(targetDate: string): string {
   return ['## 🎈 今日节日', '', blocks, ''].join('\n')
 }
 
-function buildMarkdown(targetDate: string, files: string[], excludeFileName?: string): string {
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function shortText(text: string, max = 90): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim()
+  if (cleaned.length <= max) return cleaned
+  return `${cleaned.slice(0, max - 1)}…`
+}
+
+function pickTitle(item: WikiItem): string {
+  const pageTitle = item.pages?.[0]?.titles?.normalized?.trim()
+  if (pageTitle) return pageTitle
+  const text = item.text?.trim() ?? ''
+  if (!text) return '历史事件'
+  return shortText(text, 24)
+}
+
+function toBullet(item: WikiItem, fallbackYear = '佚年'): string {
+  const year = Number.isFinite(item.year) ? String(item.year) : fallbackYear
+  const text = item.text?.trim() || pickTitle(item)
+  return `- ${year}年 — ${text}`
+}
+
+async function fetchWikiList(kind: 'events' | 'births' | 'deaths' | 'holidays', month: number, day: number): Promise<WikiItem[]> {
+  const url = `https://zh.wikipedia.org/api/rest_v1/feed/onthisday/${kind}/${month}/${day}`
+  const response = await fetch(url, {
+    headers: {
+      'user-agent': 'jcclab-history-generator/1.0'
+    }
+  })
+  if (!response.ok) {
+    throw new Error(`拉取 ${kind} 失败: HTTP ${response.status}`)
+  }
+  const data = (await response.json()) as { [key: string]: unknown }
+  const raw = data[kind]
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is WikiItem => typeof item === 'object' && item !== null)
+}
+
+type OnlineSource = {
+  events: WikiItem[]
+  births: WikiItem[]
+  deaths: WikiItem[]
+  holidays: WikiItem[]
+}
+
+async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
+  const [year, month, day] = targetDate.split('-').map(Number)
+  if (!year || !month || !day) throw new Error(`非法日期: ${targetDate}`)
+  const [events, births, deaths, holidays] = await Promise.all([
+    fetchWikiList('events', month, day),
+    fetchWikiList('births', month, day),
+    fetchWikiList('deaths', month, day),
+    fetchWikiList('holidays', month, day)
+  ])
+  return { events, births, deaths, holidays }
+}
+
+const CHINA_KEYWORDS = ['中国', '中华', '北京', '上海', '南京', '广州', '香港', '台湾', '清朝', '民国', '中华人民共和国', '中国共产党']
+const TECH_KEYWORDS = ['计算机', '互联网', '网络', '软件', '硬件', '卫星', '航天', 'AI', '人工智能', '芯片', '电信', '通信', '平台', '工程', '科学']
+
+function containsKeyword(text: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => new RegExp(escapeRegExp(keyword), 'i').test(text))
+}
+
+function selectUniqueByText(items: WikiItem[], limit: number): WikiItem[] {
+  const seen = new Set<string>()
+  const out: WikiItem[] = []
+  for (const item of items) {
+    const key = `${item.year ?? ''}|${item.text ?? ''}`.trim()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function pickEvents(source: WikiItem[], predicate: (item: WikiItem) => boolean, limit: number): WikiItem[] {
+  return selectUniqueByText(source.filter(predicate), limit)
+}
+
+function ensureMin(items: WikiItem[], fallback: WikiItem[], limit: number): WikiItem[] {
+  if (items.length >= limit) return items.slice(0, limit)
+  const merged = [...items]
+  for (const item of fallback) {
+    if (merged.length >= limit) break
+    merged.push(item)
+  }
+  return selectUniqueByText(merged, limit)
+}
+
+function buildSectionText(items: WikiItem[], fallbackText: string, limit = 4): string {
+  const selected = selectUniqueByText(items, limit)
+  if (selected.length === 0) return `- ${fallbackText}`
+  return selected.map((item) => toBullet(item)).join('\n\n')
+}
+
+function buildProgrammerView(events: WikiItem[]): string {
+  const tech = pickEvents(events, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 2)
+  const global = selectUniqueByText(events, 6)
+  const lines: string[] = []
+
+  if (tech[0]) {
+    lines.push(`- ${tech[0].year ?? ''}年事件提示我们：关键系统建设要优先保证可观测性与故障恢复能力，避免“功能先行、稳定性后补”的工程失衡。`)
+  }
+  if (tech[1]) {
+    lines.push(`- 从 ${tech[1].year ?? ''} 年相关事件看，基础设施升级往往发生在风险暴露之后。对研发团队而言，更优策略是提前做压测、演练与回滚预案。`)
+  }
+  const ref = global.find((item) => (item.text ?? '').length > 0)
+  if (ref) {
+    lines.push(`- 历史条目反复说明同一件事：信息传递速度决定决策质量。工程实践里，清晰日志、可靠告警与简洁应急流程比“临场英雄主义”更关键。`)
+  }
+
+  return lines.join('\n\n')
+}
+
+function buildHolidayFromOnline(holidays: WikiItem[]): string {
+  const selected = selectUniqueByText(holidays, 2)
+  if (selected.length === 0) return ''
+  const blocks = selected.map((item) => {
+    const title = pickTitle(item)
+    const intro = shortText(item.text ?? `${title}是当日纪念节点。`, 120)
+    return [title, '', intro].join('\n')
+  })
+  return ['## 🎈 今日节日', '', ...blocks.flatMap((block, i) => (i === 0 ? [block] : ['', block])), ''].join('\n')
+}
+
+function buildMarkdown(targetDate: string, source: OnlineSource): string {
   const headingDate = formatChineseDate(targetDate)
   const lunarText = formatLunarLine(targetDate)
-  const festivalSection = buildFestivalSection(targetDate)
-  const sectionBlocks = SECTION_ORDER.map((name) => {
-    const content = pickSectionContent(files, name, excludeFileName)
-    return [`## ${name}`, '', content].join('\n')
-  })
-  const sections = sectionBlocks.join('\n\n---\n\n')
-
+  const onlineFestival = buildHolidayFromOnline(source.holidays)
+  const fallbackFestival = buildFestivalSection(targetDate)
+  const festivalSection = onlineFestival || fallbackFestival
   const festivalBlock = festivalSection ? [festivalSection, '---', ''].join('\n') : ''
+
+  const allEvents = selectUniqueByText(source.events, 50)
+  const ancient = pickEvents(allEvents, (item) => (item.year ?? 99999) <= 1700, 3)
+  const chinaModern = pickEvents(allEvents, (item) => (item.year ?? 0) >= 1800 && containsKeyword(item.text ?? '', CHINA_KEYWORDS), 4)
+  const internationalModern = pickEvents(allEvents, (item) => (item.year ?? 0) >= 1701 && !containsKeyword(item.text ?? '', CHINA_KEYWORDS), 5)
+  const tech = pickEvents(allEvents, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 4)
+  const internationalNews = pickEvents(allEvents, (item) => (item.year ?? 0) >= 1990 && !containsKeyword(item.text ?? '', CHINA_KEYWORDS), 4)
+
+  const sectionMap: Record<(typeof SECTION_ORDER)[number], string> = {
+    '🏛️ 古代印记': buildSectionText(ensureMin(ancient, allEvents, 3), '暂无古代事件条目，后续补充。', 3),
+    '🌍 近现代·国际': buildSectionText(ensureMin(internationalModern, allEvents, 5), '暂无近现代国际条目，后续补充。', 5),
+    '💻 科技与互联网': buildSectionText(ensureMin(tech, internationalModern, 4), '暂无科技与互联网条目，后续补充。', 4),
+    '🇨🇳 中国近现代': buildSectionText(ensureMin(chinaModern, allEvents.filter((item) => (item.year ?? 0) >= 1800), 4), '暂无中国近现代条目，后续补充。', 4),
+    '🌐 国际要闻': buildSectionText(ensureMin(internationalNews, internationalModern, 4), '暂无国际要闻条目，后续补充。', 4),
+    '🌟 今日出生': buildSectionText(source.births, '暂无今日出生条目，后续补充。', 4),
+    '⚰️ 今日逝世': buildSectionText(source.deaths, '暂无今日逝世条目，后续补充。', 4),
+    '👨‍💻 程序员视角': buildProgrammerView(allEvents) || '- 历史提醒工程实践：稳定性、可观测性和长期迭代能力同等重要。'
+  }
+
+  const sections = SECTION_ORDER.map((name) => [`## ${name}`, '', sectionMap[name]].join('\n')).join('\n\n---\n\n')
 
   return [
     `【历史上的今天】${targetDate}`,
@@ -212,7 +298,7 @@ function buildMarkdown(targetDate: string, files: string[], excludeFileName?: st
     .trim()
 }
 
-function main(): void {
+async function main(): Promise<void> {
   if (!fs.existsSync(historyDir)) {
     throw new Error(`未找到目录: ${historyDir}`)
   }
@@ -229,19 +315,20 @@ function main(): void {
     return
   }
 
-  const files = listHistoryFiles()
-  if (files.length === 0) {
-    throw new Error('history 目录为空，无法基于历史样例生成内容。')
+  try {
+    const source = await fetchOnlineSource(targetDate)
+    const markdown = buildMarkdown(targetDate, source)
+    fs.writeFileSync(targetFilePath, `${markdown}\n`, 'utf8')
+    console.log(`已生成历史文件: ${path.relative(rootDir, targetFilePath)}`)
+    console.log(`已联网拉取条目：events=${source.events.length}, births=${source.births.length}, deaths=${source.deaths.length}, holidays=${source.holidays.length}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`联网生成失败: ${message}`)
   }
-
-  const markdown = buildMarkdown(targetDate, files, targetFileName)
-  fs.writeFileSync(targetFilePath, `${markdown}\n`, 'utf8')
-
-  console.log(`已生成历史文件: ${path.relative(rootDir, targetFilePath)}`)
 }
 
 try {
-  main()
+  await main()
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`generate-history-daily 失败: ${message}`)

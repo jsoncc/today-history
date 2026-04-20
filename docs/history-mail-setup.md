@@ -12,6 +12,7 @@
 - 本地若需保留手改稿、不覆盖已有文件，可设置环境变量：`SKIP_EXISTING_HISTORY_FILE=true`。
 - 节日模块：有节日则展示“今日节日”，无节日则不展示该模块
 - 农历与节气：使用 `lunar-javascript` 计算农历行；节气（如谷雨）会进入“今日节日”模块
+- 历史条目来源：生成时会联网拉取维基百科「历史上的今天」接口（事件 / 出生 / 逝世 / 节日），再按固定栏目模板编排
 
 ## 2) 必填 GitHub Secrets
 
@@ -40,6 +41,6 @@ TARGET_DATE=2026-04-20 npm run history:daily
 - 文件：`.github/workflows/history-daily-mail.yml`
 - 定时表达式：`30 13 * * *`（UTC，对应北京时间 21:30）
 - 支持 `workflow_dispatch` 手动触发
-- 当前为“免费方案A”：不依赖 AI 接口，基于 `history` 目录已有内容重组生成次日稿件
+- 当前方案：不依赖 AI 接口，使用公开在线历史接口实时取数并按模板生成
 - 生成后会自动 `git commit` 并 `git push`，把新增/更新的 `history-*.md` 写回仓库
 - 邮件标题固定为：`【历史上的今天】YYYY-MM-DD`
