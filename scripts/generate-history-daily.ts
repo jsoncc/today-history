@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Solar } from 'lunar-javascript'
+import * as OpenCC from 'opencc-js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.join(__dirname, '..')
@@ -9,6 +10,7 @@ const historyDir = path.join(rootDir, 'src', 'assets', 'history')
 
 /** 全文收尾句；若被 parseSections 吃进「程序员视角」区块，会与 buildMarkdown 末尾再追加的一次重复，需在抽取章节时剥掉。 */
 const HISTORY_CLOSING_LINE = '✨ 历史不会重复，但总会惊人地相似 ✨'
+const toSimplified = OpenCC.Converter({ from: 'tw', to: 'cn' })
 
 const SECTION_ORDER = [
   '🏛️ 古代印记',
@@ -329,6 +331,65 @@ function buildSectionText(items: WikiItem[], fallbackText: string, limit = 4): s
   return selected.map((item) => toBullet(item)).join('\n\n')
 }
 
+function normalizeFestivalTitle(title: string): string {
+  return title
+    .replace(/\s+/g, ' ')
+    .replace(/（.*?）/g, '')
+    .replace(/\(.*?\)/g, '')
+    .trim()
+}
+
+function isGarbageHolidayTitle(title: string): boolean {
+  const t = title.trim()
+  if (!t) return true
+  if (t.length <= 1) return true
+  if (/^[\u4e00-\u9fa5A-Za-z]{1,6}$/.test(t)) return true // 仅国家/地区短词
+  if (/[}{[\]<>]/.test(t)) return true
+  if (/[)]{2,}|[（)]{3,}/.test(t)) return true
+  return false
+}
+
+function buildHolidayBlocksFromOnline(holidays: WikiItem[], knownTitles: Set<string>): string[] {
+  const parsed = holidays
+    .map(parseHolidayEntry)
+    .map(({ title, intro }) => ({
+      title: title.trim(),
+      intro: intro.trim()
+    }))
+    .filter(({ title }) => !isGarbageHolidayTitle(title))
+    .map(({ title, intro }) => ({
+      title,
+      intro: intro.length >= 8 ? intro : `${title}是当日纪念节点。`
+    }))
+
+  const blocks: string[] = []
+  const seen = new Set<string>()
+  for (const item of parsed) {
+    const key = normalizeFestivalTitle(item.title)
+    if (!key) continue
+    if (knownTitles.has(key)) continue
+    if (seen.has(key)) continue
+    seen.add(key)
+    blocks.push([item.title, '', item.intro].join('\n'))
+    if (blocks.length >= 2) break
+  }
+  return blocks
+}
+
+function buildFestivalSectionMerged(targetDate: string, holidays: WikiItem[]): string {
+  const fixedBody = buildFixedFestivalBody(targetDate)
+  const jieQiBody = buildJieQiFestivalBody(targetDate)
+
+  const known = new Set<string>()
+  if (fixedBody) known.add(normalizeFestivalTitle(fixedBody.split('\n')[0] ?? ''))
+  if (jieQiBody) known.add(normalizeFestivalTitle(jieQiBody.split('\n')[0] ?? ''))
+
+  const onlineBlocks = buildHolidayBlocksFromOnline(holidays, known)
+  const blocks = [fixedBody, jieQiBody, ...onlineBlocks].filter(Boolean).join('\n\n')
+  if (!blocks) return ''
+  return ['## 🎈 今日节日', '', blocks, ''].join('\n')
+}
+
 function buildProgrammerView(events: WikiItem[]): string {
   const top = selectUniqueByText(events, 12)
   const tech = top.find((item) => containsKeyword(item.text ?? '', TECH_KEYWORDS))
@@ -354,24 +415,10 @@ function buildProgrammerView(events: WikiItem[]): string {
   return lines.slice(0, 3).join('\n\n')
 }
 
-function buildHolidayFromOnline(holidays: WikiItem[]): string {
-  const selected = selectUniqueByText(holidays, 2)
-  if (selected.length === 0) return ''
-  const blocks = selected.map((item) => {
-    const parsed = parseHolidayEntry(item)
-    const title = parsed.title
-    const intro = parsed.intro
-    return [title, '', intro].join('\n')
-  })
-  return ['## 🎈 今日节日', '', ...blocks.flatMap((block, i) => (i === 0 ? [block] : ['', block])), ''].join('\n')
-}
-
 function buildMarkdown(targetDate: string, source: OnlineSource): string {
   const headingDate = formatChineseDate(targetDate)
   const lunarText = formatLunarLine(targetDate)
-  const onlineFestival = buildHolidayFromOnline(source.holidays)
-  const fallbackFestival = buildFestivalSection(targetDate)
-  const festivalSection = onlineFestival || fallbackFestival
+  const festivalSection = buildFestivalSectionMerged(targetDate, source.holidays)
   const festivalBlock = festivalSection ? [festivalSection, '---', ''].join('\n') : ''
 
   const allEvents = selectUniqueByText(source.events, 50)
@@ -434,7 +481,7 @@ async function main(): Promise<void> {
 
   try {
     const source = await fetchOnlineSource(targetDate)
-    const markdown = buildMarkdown(targetDate, source)
+    const markdown = toSimplified(buildMarkdown(targetDate, source))
     fs.writeFileSync(targetFilePath, `${markdown}\n`, 'utf8')
     console.log(`已生成历史文件: ${path.relative(rootDir, targetFilePath)}`)
     console.log(`已联网拉取条目：events=${source.events.length}, births=${source.births.length}, deaths=${source.deaths.length}, holidays=${source.holidays.length}`)

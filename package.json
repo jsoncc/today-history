@@ -26,6 +26,7 @@
     "lunar-typescript": "^1.8.6",
     "marked": "^17.0.5",
     "nodemailer": "^7.0.9",
+    "opencc-js": "^1.0.5",
     "solarlunar": "^3.1.0",
     "vue": "^3.4.0"
   },
