@@ -2,8 +2,8 @@ name: Generate and Mail Daily History
 
 on:
   schedule:
-    # 北京时间 21:30 = UTC 13:30
-    - cron: '30 13 * * *'
+    # 北京时间 20:00 = UTC 12:00
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       target_date:
