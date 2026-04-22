@@ -302,7 +302,8 @@ function selectUniqueByText(items: WikiItem[], limit: number): WikiItem[] {
   const seen = new Set<string>()
   const out: WikiItem[] = []
   for (const item of items) {
-    const key = `${item.year ?? ''}|${item.text ?? ''}`.trim()
+    const normalizedText = toSimplified((item.text ?? '').trim())
+    const key = `${item.year ?? ''}|${normalizedText}`.trim()
     if (!key || seen.has(key)) continue
     seen.add(key)
     out.push(item)
@@ -357,10 +358,17 @@ function buildHolidayBlocksFromOnline(holidays: WikiItem[], knownTitles: Set<str
       intro: intro.trim()
     }))
     .filter(({ title }) => !isGarbageHolidayTitle(title))
-    .map(({ title, intro }) => ({
-      title,
-      intro: intro.length >= 8 ? intro : `${title}是当日纪念节点。`
-    }))
+    .map(({ title, intro }) => {
+      const t = toSimplified(title)
+      const i = toSimplified(intro)
+      const titleOnly = normalizeFestivalTitle(t)
+      const introOnly = normalizeFestivalTitle(i)
+      const introIsUseless = !i || introOnly === titleOnly || i.length < 8
+      return {
+        title: t,
+        intro: introIsUseless ? `${t}是当日的重要纪念节点。` : i
+      }
+    })
 
   const blocks: string[] = []
   const seen = new Set<string>()
@@ -391,28 +399,18 @@ function buildFestivalSectionMerged(targetDate: string, holidays: WikiItem[]): s
 }
 
 function buildProgrammerView(events: WikiItem[]): string {
-  const top = selectUniqueByText(events, 12)
-  const tech = top.find((item) => containsKeyword(item.text ?? '', TECH_KEYWORDS))
-  const crisis = top.find((item) =>
-    containsKeyword(item.text ?? '', ['沉没', '爆炸', '袭击', '战争', '事故', '暂停运营', '危机'])
-  )
-  const recent = top.find((item) => (item.year ?? 0) >= 2000) ?? top[0]
-  const lines: string[] = []
+  const top = selectUniqueByText(events, 30)
+  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 3)
+  const lines = techHot
+    .map((item) => {
+      const year = item.year ? `${item.year}年` : '当年'
+      const text = shortText(toSimplified(item.text ?? ''), 110)
+      return `- ${year} — ${text}。该事件在程序员社区引发对工程实践的广泛讨论（后端 Java/Python/Go、前端 Vue/React、AI 应用）。`
+    })
+    .filter(Boolean)
 
-  if (tech) {
-    const y = tech.year ? `${tech.year}年` : '该事件'
-    lines.push(`- ${y}相关事件对 IT 程序员（后端 Java/Python/Go）最直接的启示是：服务稳定性优先于功能堆叠。把接口契约、异常治理、熔断限流和可观测性前置，才能让系统在峰值流量与突发故障下可控。`)
-  }
-  if (crisis) {
-    const y = crisis.year ? `${crisis.year}年` : '历史上的突发事件'
-    lines.push(`- 从${y}的突发案例看，信息延迟会放大损失。前端 Vue/React 与后端协同时，应保证状态一致与降级可见：统一状态页、分级告警、幂等接口和回滚开关要在设计阶段就明确。`)
-  }
-  if (recent) {
-    const y = recent.year ? `${recent.year}年` : '当代'
-    lines.push(`- ${y}之后的大量事件共同指向一个现实：系统边界越来越跨组织、跨地区。面向 AI 应用开发时，除了模型效果，还要同步建设数据质量、提示词治理、评测基线与安全审计，否则上线后难以长期演进。`)
-  }
-
-  return lines.slice(0, 3).join('\n\n')
+  if (lines.length > 0) return lines.slice(0, 3).join('\n\n')
+  return '- 程序员社区热点：当日缺少直接技术事件条目，讨论焦点通常围绕后端稳定性、前端性能优化与 AI 应用落地。'
 }
 
 function buildMarkdown(targetDate: string, source: OnlineSource): string {
