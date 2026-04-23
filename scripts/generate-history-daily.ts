@@ -29,6 +29,7 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '03-08': { name: '国际妇女节', intro: '关注女性权益、劳动贡献与社会平等的重要纪念日。' },
   '04-01': { name: '愚人节', intro: '以善意玩笑和轻松互动为主的民间节日文化。' },
   '04-22': { name: '世界地球日', intro: '倡导环境保护、可持续发展与公众生态意识提升。' },
+  '04-24': { name: '世界实验动物日', intro: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。' },
   '05-01': { name: '国际劳动节', intro: '纪念劳动价值，关注劳动者权益与社会保障。' },
   '05-04': { name: '中国青年节', intro: '纪念青年运动传统，鼓励青年担当与创新精神。' },
   '06-01': { name: '国际儿童节', intro: '聚焦儿童成长、教育与健康发展。' },
@@ -173,9 +174,20 @@ function parseHolidayEntry(item: WikiItem): { title: string; intro: string } {
     }
   }
 
+  const cleanedTitle = (titleCandidate || '今日纪念日')
+    .replace(/^[-—:：)\]】}\s]+/, '')
+    .replace(/\s*（英语）\s*$/i, '')
+    .replace(/\s*\(英语\)\s*$/i, '')
+    .trim()
+  const cleanedIntro = (rawText || `${cleanedTitle}是当日纪念节点。`)
+    .replace(/^[-—:：)\]】}\s]+/, '')
+    .replace(/\s*（英语）\s*$/i, '')
+    .replace(/\s*\(英语\)\s*$/i, '')
+    .trim()
+
   return {
-    title: titleCandidate || '今日纪念日',
-    intro: rawText || `${titleCandidate || '该节日'}是当日纪念节点。`
+    title: cleanedTitle || '今日纪念日',
+    intro: cleanedIntro || `${cleanedTitle || '该节日'}是当日纪念节点。`
   }
 }
 
@@ -245,9 +257,128 @@ type OnlineSource = {
   holidays: WikiItem[]
 }
 
-async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
+function normalizeDateLabel(targetDate: string): { month: number; day: number; label: string } {
   const [year, month, day] = targetDate.split('-').map(Number)
   if (!year || !month || !day) throw new Error(`非法日期: ${targetDate}`)
+  return { month, day, label: `${month}月${day}日` }
+}
+
+function toYear(value: string): number | undefined {
+  const cleaned = value.trim()
+  if (!cleaned) return undefined
+  if (cleaned.startsWith('前')) {
+    const n = Number(cleaned.slice(1))
+    return Number.isFinite(n) ? -n : undefined
+  }
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function isMeaningfulText(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  if (/^[-—–_\s·.]+$/.test(t)) return false
+  const nonSymbol = t.replace(/[-—–_\s·.，,。；;:：()（）【】[\]{}]/g, '')
+  return nonSymbol.length >= 2
+}
+
+function extractBaiduItems(raw: string): OnlineSource {
+  const cleaned = decodeHtmlEntities(
+    raw
+      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+      .replace(/<[^>]+>/g, '\n')
+  )
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+
+  const lines = cleaned
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 6 && line.length <= 140)
+
+  const events: WikiItem[] = []
+  const births: WikiItem[] = []
+  const deaths: WikiItem[] = []
+  const holidays: WikiItem[] = []
+
+  const eventReg = /^(前?\d{1,4})年[—\-–:：]?\s*(.+)$/
+  const holidayReg = /^(世界|国际|全国|中国|地球|海军|航天).*(日|节|纪念日)$/
+
+  for (const line of lines) {
+    const m = line.match(eventReg)
+    if (m) {
+      const year = toYear(m[1])
+      const text = m[2].trim()
+      if (!isMeaningfulText(text)) continue
+      const item: WikiItem = { year, text }
+      if (/出生/.test(text)) births.push(item)
+      else if (/逝世|去世|病逝|离世|辞世|身亡|遇难/.test(text)) deaths.push(item)
+      else events.push(item)
+      continue
+    }
+    if (holidayReg.test(line) && !/星期|农历|公历/.test(line) && isMeaningfulText(line)) {
+      holidays.push({ text: line })
+    }
+  }
+
+  return {
+    events: selectUniqueByText(events, 40),
+    births: selectUniqueByText(births, 20),
+    deaths: selectUniqueByText(deaths, 20),
+    holidays: selectUniqueByText(holidays, 6)
+  }
+}
+
+function filterMeaningful(items: WikiItem[]): WikiItem[] {
+  return items.filter((item) => isMeaningfulText(item.text ?? ''))
+}
+
+function filterChinesePreferred(items: WikiItem[]): WikiItem[] {
+  const meaningful = filterMeaningful(items)
+  const chinese = meaningful.filter((item) => hasChinese(item.text ?? ''))
+  return chinese.length > 0 ? chinese : meaningful
+}
+
+async function fetchBaiduBaike(targetDate: string): Promise<OnlineSource> {
+  const { label } = normalizeDateLabel(targetDate)
+  const url = `https://baike.baidu.com/item/${encodeURIComponent(label)}`
+  const response = await fetch(url, {
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+    }
+  })
+  if (!response.ok) {
+    throw new Error(`百度百科拉取失败: HTTP ${response.status}`)
+  }
+  const html = await response.text()
+  const parsed = extractBaiduItems(html)
+  return parsed
+}
+
+async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
+  const { month, day } = normalizeDateLabel(targetDate)
+
+  // 优先百度百科：当前仅对“节日”使用百度数据，事件类条目仍走更稳定的数据源，避免半截文本污染正文
+  let baiduHolidays: WikiItem[] = []
+  try {
+    const baidu = await fetchBaiduBaike(targetDate)
+    baiduHolidays = filterChinesePreferred(baidu.holidays)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`百度百科不可用，回退其他源: ${message}`)
+  }
+
   try {
     const [events, births, deaths, holidays] = await Promise.all([
       fetchWikiList('events', month, day),
@@ -255,11 +386,22 @@ async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
       fetchWikiList('deaths', month, day),
       fetchWikiList('holidays', month, day)
     ])
-    return { events, births, deaths, holidays }
+    return {
+      events,
+      births,
+      deaths,
+      holidays: ensureMin(baiduHolidays, holidays, 4)
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn(`主数据源不可用，切换备用源: ${message}`)
-    return fetchMuffinLabs(targetDate)
+    const fallback = await fetchMuffinLabs(targetDate)
+    return {
+      events: fallback.events,
+      births: fallback.births,
+      deaths: fallback.deaths,
+      holidays: baiduHolidays
+    }
   }
 }
 
@@ -350,6 +492,10 @@ function isGarbageHolidayTitle(title: string): boolean {
   return false
 }
 
+function hasChinese(text: string): boolean {
+  return /[\u4e00-\u9fa5]/.test(text)
+}
+
 function buildHolidayBlocksFromOnline(holidays: WikiItem[], knownTitles: Set<string>): string[] {
   const parsed = holidays
     .map(parseHolidayEntry)
@@ -357,7 +503,7 @@ function buildHolidayBlocksFromOnline(holidays: WikiItem[], knownTitles: Set<str
       title: title.trim(),
       intro: intro.trim()
     }))
-    .filter(({ title }) => !isGarbageHolidayTitle(title))
+    .filter(({ title, intro }) => !isGarbageHolidayTitle(title) && (hasChinese(title) || hasChinese(intro)))
     .map(({ title, intro }) => {
       const t = toSimplified(title)
       const i = toSimplified(intro)
@@ -399,18 +545,15 @@ function buildFestivalSectionMerged(targetDate: string, holidays: WikiItem[]): s
 }
 
 function buildProgrammerView(events: WikiItem[]): string {
-  const top = selectUniqueByText(events, 30)
-  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 3)
-  const lines = techHot
-    .map((item) => {
-      const year = item.year ? `${item.year}年` : '当年'
-      const text = shortText(toSimplified(item.text ?? ''), 110)
-      return `- ${year} — ${text}。该事件在程序员社区引发对工程实践的广泛讨论（后端 Java/Python/Go、前端 Vue/React、AI 应用）。`
-    })
-    .filter(Boolean)
-
-  if (lines.length > 0) return lines.slice(0, 3).join('\n\n')
-  return '- 程序员社区热点：当日缺少直接技术事件条目，讨论焦点通常围绕后端稳定性、前端性能优化与 AI 应用落地。'
+  const top = selectUniqueByText(events, 40)
+  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 4)
+  const chosen = techHot.length >= 3 ? techHot.slice(0, 3) : ensureMin(techHot, top, 3)
+  const lines = chosen.map((item) => {
+    const year = item.year ? `${item.year}年` : '当年'
+    const text = shortText(toSimplified(item.text ?? ''), 100)
+    return `- ${year} — 程序员社区热点：${text}`
+  })
+  return lines.join('\n\n')
 }
 
 function buildMarkdown(targetDate: string, source: OnlineSource): string {
@@ -419,7 +562,9 @@ function buildMarkdown(targetDate: string, source: OnlineSource): string {
   const festivalSection = buildFestivalSectionMerged(targetDate, source.holidays)
   const festivalBlock = festivalSection ? [festivalSection, '---', ''].join('\n') : ''
 
-  const allEvents = selectUniqueByText(source.events, 50)
+  const allEvents = selectUniqueByText(filterMeaningful(source.events), 50)
+  const births = filterChinesePreferred(source.births)
+  const deaths = filterChinesePreferred(source.deaths)
   const ancient = pickEvents(allEvents, (item) => (item.year ?? 99999) <= 1700, 3)
   const chinaModern = pickEvents(allEvents, (item) => (item.year ?? 0) >= 1800 && containsKeyword(item.text ?? '', CHINA_KEYWORDS), 4)
   const internationalModern = pickEvents(allEvents, (item) => (item.year ?? 0) >= 1701 && !containsKeyword(item.text ?? '', CHINA_KEYWORDS), 5)
@@ -432,8 +577,8 @@ function buildMarkdown(targetDate: string, source: OnlineSource): string {
     '💻 科技与互联网': buildSectionText(ensureMin(tech, internationalModern, 4), '暂无科技与互联网条目，后续补充。', 4),
     '🇨🇳 中国近现代': buildSectionText(ensureMin(chinaModern, allEvents.filter((item) => (item.year ?? 0) >= 1800), 4), '暂无中国近现代条目，后续补充。', 4),
     '🌐 国际要闻': buildSectionText(ensureMin(internationalNews, internationalModern, 4), '暂无国际要闻条目，后续补充。', 4),
-    '🌟 今日出生': buildSectionText(source.births, '暂无今日出生条目，后续补充。', 4),
-    '⚰️ 今日逝世': buildSectionText(source.deaths, '暂无今日逝世条目，后续补充。', 4),
+    '🌟 今日出生': buildSectionText(births, '暂无今日出生条目，后续补充。', 4),
+    '⚰️ 今日逝世': buildSectionText(deaths, '暂无今日逝世条目，后续补充。', 4),
     '👨‍💻 程序员视角': buildProgrammerView(allEvents) || '- 历史提醒工程实践：稳定性、可观测性和长期迭代能力同等重要。'
   }
 
