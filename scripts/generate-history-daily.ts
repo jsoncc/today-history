@@ -30,6 +30,7 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '04-01': { name: '愚人节', intro: '以善意玩笑和轻松互动为主的民间节日文化。' },
   '04-22': { name: '世界地球日', intro: '倡导环境保护、可持续发展与公众生态意识提升。' },
   '04-24': { name: '世界实验动物日', intro: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。' },
+  '04-25': { name: '全国儿童预防接种宣传日', intro: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。' },
   '05-01': { name: '国际劳动节', intro: '纪念劳动价值，关注劳动者权益与社会保障。' },
   '05-04': { name: '中国青年节', intro: '纪念青年运动传统，鼓励青年担当与创新精神。' },
   '06-01': { name: '国际儿童节', intro: '聚焦儿童成长、教育与健康发展。' },
@@ -551,7 +552,7 @@ function buildProgrammerView(events: WikiItem[]): string {
   const lines = chosen.map((item) => {
     const year = item.year ? `${item.year}年` : '当年'
     const text = shortText(toSimplified(item.text ?? ''), 100)
-    return `- ${year} — 程序员社区热点：${text}`
+    return `- ${year} — ${text}`
   })
   return lines.join('\n\n')
 }
