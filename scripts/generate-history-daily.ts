@@ -31,6 +31,7 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '04-22': { name: '世界地球日', intro: '倡导环境保护、可持续发展与公众生态意识提升。' },
   '04-24': { name: '世界实验动物日', intro: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。' },
   '04-25': { name: '全国儿童预防接种宣传日', intro: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。' },
+  '04-26': { name: '世界知识产权日', intro: '由世界知识产权组织设立，旨在提升公众对专利、版权、商标等知识产权保护与创新激励作用的认知。' },
   '05-01': { name: '国际劳动节', intro: '纪念劳动价值，关注劳动者权益与社会保障。' },
   '05-04': { name: '中国青年节', intro: '纪念青年运动传统，鼓励青年担当与创新精神。' },
   '06-01': { name: '国际儿童节', intro: '聚焦儿童成长、教育与健康发展。' },
@@ -39,6 +40,14 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '09-10': { name: '中国教师节', intro: '向教育工作者致敬，强调教育与人才培养的价值。' },
   '10-01': { name: '中华人民共和国国庆节', intro: '纪念新中国成立的重要国家节日。' },
   '12-25': { name: '圣诞节（Christmas）', intro: '在全球范围具有广泛影响的文化节日。' }
+}
+
+const HOLIDAY_INTRO_MAP: Record<string, string> = {
+  世界知识产权日: '由世界知识产权组织设立，旨在提升公众对专利、版权、商标等知识产权保护与创新激励作用的认知。',
+  国际切尔诺贝利灾难纪念日: '联合国设立的国际纪念日，用于缅怀核事故受害者并强调核安全、环境修复与长期公共健康治理的重要性。',
+  中国航天日: '中国航天日设于每年4月24日，纪念中国航天事业的重要里程碑，相关活动聚焦航天科普、技术创新与青年教育。',
+  全国儿童预防接种宣传日: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。',
+  世界实验动物日: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。'
 }
 
 type WikiPage = {
@@ -247,7 +256,8 @@ async function fetchMuffinLabs(targetDate: string): Promise<OnlineSource> {
     events: toWiki(eventsRaw),
     births: toWiki(birthsRaw),
     deaths: toWiki(deathsRaw),
-    holidays: []
+    holidays: [],
+    techHints: []
   }
 }
 
@@ -256,6 +266,7 @@ type OnlineSource = {
   births: WikiItem[]
   deaths: WikiItem[]
   holidays: WikiItem[]
+  techHints: WikiItem[]
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -337,7 +348,8 @@ function extractBaiduItems(raw: string): OnlineSource {
     events: selectUniqueByText(events, 40),
     births: selectUniqueByText(births, 20),
     deaths: selectUniqueByText(deaths, 20),
-    holidays: selectUniqueByText(holidays, 6)
+    holidays: selectUniqueByText(holidays, 6),
+    techHints: pickEvents(events, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 8)
   }
 }
 
@@ -372,9 +384,11 @@ async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
 
   // 优先百度百科：当前仅对“节日”使用百度数据，事件类条目仍走更稳定的数据源，避免半截文本污染正文
   let baiduHolidays: WikiItem[] = []
+  let baiduTechHints: WikiItem[] = []
   try {
     const baidu = await fetchBaiduBaike(targetDate)
     baiduHolidays = filterChinesePreferred(baidu.holidays)
+    baiduTechHints = filterMeaningful(baidu.techHints)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn(`百度百科不可用，回退其他源: ${message}`)
@@ -391,7 +405,8 @@ async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
       events,
       births,
       deaths,
-      holidays: ensureMin(baiduHolidays, holidays, 4)
+      holidays: ensureMin(baiduHolidays, holidays, 4),
+      techHints: baiduTechHints
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -401,7 +416,8 @@ async function fetchOnlineSource(targetDate: string): Promise<OnlineSource> {
       events: fallback.events,
       births: fallback.births,
       deaths: fallback.deaths,
-      holidays: baiduHolidays
+      holidays: baiduHolidays,
+      techHints: baiduTechHints
     }
   }
 }
@@ -483,6 +499,13 @@ function normalizeFestivalTitle(title: string): string {
     .trim()
 }
 
+function pickHolidayIntro(title: string, intro: string): string {
+  const key = normalizeFestivalTitle(title)
+  const mapped = HOLIDAY_INTRO_MAP[key]
+  if (mapped) return mapped
+  return intro
+}
+
 function isGarbageHolidayTitle(title: string): boolean {
   const t = title.trim()
   if (!t) return true
@@ -511,9 +534,10 @@ function buildHolidayBlocksFromOnline(holidays: WikiItem[], knownTitles: Set<str
       const titleOnly = normalizeFestivalTitle(t)
       const introOnly = normalizeFestivalTitle(i)
       const introIsUseless = !i || introOnly === titleOnly || i.length < 8
+      const resolvedIntro = introIsUseless ? `${t}是当日的重要纪念节点。` : i
       return {
         title: t,
-        intro: introIsUseless ? `${t}是当日的重要纪念节点。` : i
+        intro: pickHolidayIntro(t, resolvedIntro)
       }
     })
 
@@ -547,14 +571,19 @@ function buildFestivalSectionMerged(targetDate: string, holidays: WikiItem[]): s
 
 function buildProgrammerView(events: WikiItem[]): string {
   const top = selectUniqueByText(events, 40)
-  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 4)
-  const chosen = techHot.length >= 3 ? techHot.slice(0, 3) : ensureMin(techHot, top, 3)
+  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 6)
+  const chosen = techHot.slice(0, 3)
   const lines = chosen.map((item) => {
     const year = item.year ? `${item.year}年` : '当年'
     const text = shortText(toSimplified(item.text ?? ''), 100)
     return `- ${year} — ${text}`
   })
-  return lines.join('\n\n')
+  if (lines.length > 0) return lines.join('\n\n')
+  return [
+    '- 当天公开史料中与 IT 直接相关的历史条目较少，程序员社区讨论通常会回到工程基本面：服务稳定性、可观测性与变更治理。',
+    '- 后端（Java/Python/Go）侧重点通常在接口契约、幂等控制、限流熔断与数据库一致性。',
+    '- 前端（Vue/React）与 AI 应用侧重点通常在性能监控、灰度发布、评测基线和数据安全审计。'
+  ].join('\n\n')
 }
 
 function buildMarkdown(targetDate: string, source: OnlineSource): string {
@@ -564,6 +593,7 @@ function buildMarkdown(targetDate: string, source: OnlineSource): string {
   const festivalBlock = festivalSection ? [festivalSection, '---', ''].join('\n') : ''
 
   const allEvents = selectUniqueByText(filterMeaningful(source.events), 50)
+  const programmerPool = selectUniqueByText(filterMeaningful([...source.techHints, ...allEvents]), 60)
   const births = filterChinesePreferred(source.births)
   const deaths = filterChinesePreferred(source.deaths)
   const ancient = pickEvents(allEvents, (item) => (item.year ?? 99999) <= 1700, 3)
@@ -580,7 +610,7 @@ function buildMarkdown(targetDate: string, source: OnlineSource): string {
     '🌐 国际要闻': buildSectionText(ensureMin(internationalNews, internationalModern, 4), '暂无国际要闻条目，后续补充。', 4),
     '🌟 今日出生': buildSectionText(births, '暂无今日出生条目，后续补充。', 4),
     '⚰️ 今日逝世': buildSectionText(deaths, '暂无今日逝世条目，后续补充。', 4),
-    '👨‍💻 程序员视角': buildProgrammerView(allEvents) || '- 历史提醒工程实践：稳定性、可观测性和长期迭代能力同等重要。'
+    '👨‍💻 程序员视角': buildProgrammerView(programmerPool) || '- 历史提醒工程实践：稳定性、可观测性和长期迭代能力同等重要。'
   }
 
   const sections = SECTION_ORDER.map((name) => [`## ${name}`, '', sectionMap[name]].join('\n')).join('\n\n---\n\n')
