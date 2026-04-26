@@ -32,6 +32,7 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '04-24': { name: '世界实验动物日', intro: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。' },
   '04-25': { name: '全国儿童预防接种宣传日', intro: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。' },
   '04-26': { name: '世界知识产权日', intro: '由世界知识产权组织设立，旨在提升公众对专利、版权、商标等知识产权保护与创新激励作用的认知。' },
+  '04-27': { name: '世界平面设计日', intro: '以全球设计组织成立纪念日为背景，倡导以视觉设计提升公共沟通、信息可读性与文化传播质量。' },
   '05-01': { name: '国际劳动节', intro: '纪念劳动价值，关注劳动者权益与社会保障。' },
   '05-04': { name: '中国青年节', intro: '纪念青年运动传统，鼓励青年担当与创新精神。' },
   '06-01': { name: '国际儿童节', intro: '聚焦儿童成长、教育与健康发展。' },
@@ -48,6 +49,9 @@ const HOLIDAY_INTRO_MAP: Record<string, string> = {
   中国航天日: '中国航天日设于每年4月24日，纪念中国航天事业的重要里程碑，相关活动聚焦航天科普、技术创新与青年教育。',
   全国儿童预防接种宣传日: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。',
   世界实验动物日: '每年4月24日的国际纪念日，倡导科学、人道地开展动物实验，尊重实验动物为医学与人类健康事业做出的贡献。'
+  ,
+  世界平面设计日: '以全球设计组织成立纪念日为背景，强调平面设计在公共传播、信息可视化与品牌沟通中的长期价值。',
+  国王日: '荷兰全国性节日，用于庆祝国王生日，常见全民市集、音乐活动与橙色主题庆典。'
 }
 
 type WikiPage = {
@@ -438,8 +442,6 @@ const TECH_KEYWORDS = [
   '电信',
   '通信',
   '平台',
-  '工程',
-  '科学',
   'Java',
   'Python',
   'Golang',
@@ -450,7 +452,44 @@ const TECH_KEYWORDS = [
   '后端',
   '数据库',
   '云计算',
-  '微服务'
+  '微服务',
+  '手机',
+  '智能手机',
+  'Galaxy',
+  'A380',
+  '试飞',
+  '卫星发射',
+  '开源',
+  '开发者'
+]
+
+const STRICT_TECH_KEYWORDS = [
+  '计算机',
+  '互联网',
+  '网络',
+  '软件',
+  '硬件',
+  '芯片',
+  '数据库',
+  '云计算',
+  '微服务',
+  'Java',
+  'Python',
+  'Golang',
+  'Go',
+  'Vue',
+  'React',
+  'AI',
+  '人工智能',
+  '机器学习',
+  '开源',
+  '开发者',
+  '智能手机',
+  'Galaxy',
+  'A380',
+  '试飞',
+  '卫星发射',
+  'YouTube'
 ]
 
 function containsKeyword(text: string, keywords: string[]): boolean {
@@ -571,7 +610,7 @@ function buildFestivalSectionMerged(targetDate: string, holidays: WikiItem[]): s
 
 function buildProgrammerView(events: WikiItem[]): string {
   const top = selectUniqueByText(events, 40)
-  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', TECH_KEYWORDS), 6)
+  const techHot = pickEvents(top, (item) => containsKeyword(item.text ?? '', STRICT_TECH_KEYWORDS), 6)
   const chosen = techHot.slice(0, 3)
   const lines = chosen.map((item) => {
     const year = item.year ? `${item.year}年` : '当年'
