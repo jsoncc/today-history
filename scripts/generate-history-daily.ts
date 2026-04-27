@@ -33,6 +33,7 @@ const FESTIVAL_MAP: Record<string, { name: string; intro: string }> = {
   '04-25': { name: '全国儿童预防接种宣传日', intro: '每年4月25日设立的全国性健康宣传日，旨在普及免疫规划知识，提升公众对疫苗接种与儿童传染病预防的科学认知。' },
   '04-26': { name: '世界知识产权日', intro: '由世界知识产权组织设立，旨在提升公众对专利、版权、商标等知识产权保护与创新激励作用的认知。' },
   '04-27': { name: '世界平面设计日', intro: '以全球设计组织成立纪念日为背景，倡导以视觉设计提升公共沟通、信息可读性与文化传播质量。' },
+  '04-28': { name: '世界安全生产与健康日', intro: '由国际劳工组织推动设立，旨在提升公众对职业安全与健康管理的重视，倡导通过制度与技术手段减少工伤和职业病风险。' },
   '05-01': { name: '国际劳动节', intro: '纪念劳动价值，关注劳动者权益与社会保障。' },
   '05-04': { name: '中国青年节', intro: '纪念青年运动传统，鼓励青年担当与创新精神。' },
   '06-01': { name: '国际儿童节', intro: '聚焦儿童成长、教育与健康发展。' },
@@ -52,6 +53,8 @@ const HOLIDAY_INTRO_MAP: Record<string, string> = {
   ,
   世界平面设计日: '以全球设计组织成立纪念日为背景，强调平面设计在公共传播、信息可视化与品牌沟通中的长期价值。',
   国王日: '荷兰全国性节日，用于庆祝国王生日，常见全民市集、音乐活动与橙色主题庆典。'
+  ,
+  世界安全生产与健康日: '由国际劳工组织推动设立，旨在提升公众对职业安全与健康管理的重视，倡导通过制度与技术手段减少工伤和职业病风险。'
 }
 
 type WikiPage = {
@@ -675,6 +678,56 @@ function buildMarkdown(targetDate: string, source: OnlineSource): string {
     .trim()
 }
 
+function qualityGate(markdown: string): string {
+  let text = markdown
+
+  // 1) 清理明显脏行（仅符号或异常括号残片）
+  text = text
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim()
+      if (!t) return true
+      if (/^[-—–_.,:：;；()\[\]{}<>]+$/.test(t)) return false
+      if (/^[)）\]】}\s,，.。:：-]+/.test(t) && t.length < 12) return false
+      return true
+    })
+    .join('\n')
+
+  // 2) 节日介绍空洞句兜底替换
+  text = text.replace(/^(.*)是当日的重要纪念节点。$/gm, (_m, p1: string) => {
+    const title = p1.trim()
+    const mapped = HOLIDAY_INTRO_MAP[normalizeFestivalTitle(title)]
+    if (mapped) return mapped
+    return `${title}是具有公共纪念意义的节点，常用于提示公众关注该主题背后的历史与现实问题。`
+  })
+
+  // 3) 程序员视角模板化空话兜底替换
+  const weakPatterns = [
+    '当天公开史料中与 IT 直接相关的历史条目较少',
+    '后端（Java/Python/Go）侧重点通常在接口契约',
+    '前端（Vue/React）与 AI 应用侧重点通常在性能监控'
+  ]
+  const hasWeakProgrammerView = weakPatterns.some((p) => text.includes(p))
+  if (hasWeakProgrammerView) {
+    text = text.replace(
+      /## 👨‍💻 程序员视角[\s\S]*?---/m,
+      [
+        '## 👨‍💻 程序员视角',
+        '',
+        '- 技术社区长期热点之一是“高并发与高可靠”的平衡：从后端服务治理（Java/Python/Go）到链路可观测性，核心都在于让系统在峰值与异常下保持可预测。',
+        '',
+        '- 前端工程（Vue/React）侧重用户体验与交付效率并行：性能监控、灰度发布、异常回传和回滚机制已经成为大型应用的默认工程配置。',
+        '',
+        '- AI 应用开发从“模型可用”转向“模型可运营”：数据质量、评测基线、提示词治理与安全审计，正在成为团队日常迭代中的基础设施。',
+        '',
+        '---'
+      ].join('\n')
+    )
+  }
+
+  return text.replace(/\n{3,}/g, '\n\n').trim()
+}
+
 async function main(): Promise<void> {
   if (!fs.existsSync(historyDir)) {
     throw new Error(`未找到目录: ${historyDir}`)
@@ -694,7 +747,7 @@ async function main(): Promise<void> {
 
   try {
     const source = await fetchOnlineSource(targetDate)
-    const markdown = toSimplified(buildMarkdown(targetDate, source))
+    const markdown = qualityGate(toSimplified(buildMarkdown(targetDate, source)))
     fs.writeFileSync(targetFilePath, `${markdown}\n`, 'utf8')
     console.log(`已生成历史文件: ${path.relative(rootDir, targetFilePath)}`)
     console.log(`已联网拉取条目：events=${source.events.length}, births=${source.births.length}, deaths=${source.deaths.length}, holidays=${source.holidays.length}`)
